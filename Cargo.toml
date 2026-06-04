@@ -1,0 +1,75 @@
+[package]
+name = "hakimi-hub"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+
+
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "io-util", "macros", "signal", "fs"] }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# TLS - use rustls for custom ClientHello control
+rustls = { version = "0.23", features = ["ring"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+webpki-roots = "0.26"
+rcgen = "0.13"
+
+# Configuration
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "local-time"] }
+tracing-appender = "0.2"
+time = { version = "0.3", features = ["local-offset"] }
+
+# Utilities
+once_cell = "1"
+dashmap = "6"
+rand = { version = "0.8" }
+chrono = "0.4"
+dirs = "5"
+anyhow = "1"
+futures = "0.3"
+ring = "0.17"
+lru = "0.12"
+smallvec = { version = "1", features = ["write"] }
+anstream = "0.6"
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+include_dir = "0.7"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = 3
+
+[profile.dev]
+opt-level = 0
+debug = true

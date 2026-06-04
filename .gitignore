@@ -1,0 +1,22 @@
+# Rust 编译产物
+/target/
+**/*.pdb
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 本地配置
+.env
+.env.local
+*.log
