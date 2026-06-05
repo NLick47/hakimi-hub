@@ -1,6 +1,3 @@
-// Linux 系统代理设置
-// Linux 桌面环境差异大，这里只提供空实现
-
 use std::sync::Mutex;
 use tracing::info;
 
@@ -13,28 +10,33 @@ pub struct SystemProxySettings {
 
 #[derive(Debug)]
 pub struct ProxyGuard {
-    _state: Mutex<Option<SystemProxySettings>>,
+    set_by_us: Mutex<bool>,
 }
 
 impl ProxyGuard {
     pub fn new() -> Self {
-        Self { _state: Mutex::new(None) }
+        Self {
+            set_by_us: Mutex::new(false),
+        }
     }
 
     pub async fn set_proxy(&self, port: u16) -> anyhow::Result<()> {
-        // Linux 下通常需要手动配置，或者使用环境变量
-        info!("Linux 下请手动配置系统代理: http://127.0.0.1:{}/pac", port);
+        info!("Linux 下请手动配置系统代理，PAC 地址: http://127.0.0.1:{}/pac", port);
+        *self.set_by_us.lock().unwrap() = true;
         Ok(())
     }
 
     pub async fn restore(&self) -> anyhow::Result<()> {
+        self.restore_sync()
+    }
+
+    pub fn restore_sync(&self) -> anyhow::Result<()> {
+        *self.set_by_us.lock().unwrap() = false;
         Ok(())
     }
 }
 
-impl Drop for ProxyGuard {
-    fn drop(&mut self) {}
-}
+impl Drop for ProxyGuard {}
 
 pub fn restore_proxy_settings() -> anyhow::Result<()> {
     Ok(())
