@@ -50,10 +50,7 @@ pub struct DohClient {
 }
 
 impl DohClient {
-    pub fn new(
-        endpoints: Vec<DohEndpoint>,
-        dns_mapping: HashMap<String, String>,
-    ) -> Self {
+    pub fn new(endpoints: Vec<DohEndpoint>, dns_mapping: HashMap<String, String>) -> Self {
         let tls_config = Arc::new(Self::build_tls_config());
 
         Self {
@@ -200,9 +197,7 @@ impl DohClient {
 
     // 仅用国际 DoH 解析（国内 IP 全挂时回退）
     pub async fn resolve_international(&self, domain: &str) -> anyhow::Result<DohResolveResult> {
-        let trusted: Vec<&DohEndpoint> = self.endpoints.iter()
-            .filter(|e| e.trusted)
-            .collect();
+        let trusted: Vec<&DohEndpoint> = self.endpoints.iter().filter(|e| e.trusted).collect();
         if trusted.is_empty() {
             anyhow::bail!("没有配置国际 DoH 端点");
         }
@@ -217,7 +212,6 @@ impl DohClient {
         groups: Vec<Vec<&DohEndpoint>>,
         domain: &str,
     ) -> anyhow::Result<DohResolveResult> {
-
         let mut all_ips: Vec<IpAddr> = Vec::new();
         let mut doh_servers: Vec<String> = Vec::new();
 
@@ -237,14 +231,21 @@ impl DohClient {
             if !all_ips.is_empty() {
                 break;
             }
-            debug!("第 {} 级 DoH 未返回结果 for {}, 尝试下一级", stage + 1, domain);
+            debug!(
+                "第 {} 级 DoH 未返回结果 for {}, 尝试下一级",
+                stage + 1,
+                domain
+            );
         }
 
         if all_ips.is_empty() {
             anyhow::bail!("No IPs returned from any DoH endpoint for {}", domain);
         }
 
-        Ok(DohResolveResult { ips: all_ips, doh_servers })
+        Ok(DohResolveResult {
+            ips: all_ips,
+            doh_servers,
+        })
     }
 
     // 查一组端点，返回 (IP 列表, 服务器名列表)
@@ -296,7 +297,12 @@ impl DohClient {
         endpoints: Vec<&DohEndpoint>,
         domain: &str,
     ) -> anyhow::Result<(Vec<IpAddr>, Vec<String>)> {
-        debug!("DoH 查询: {} (via {}, {} 个端点共享连接)", domain, host, endpoints.len());
+        debug!(
+            "DoH 查询: {} (via {}, {} 个端点共享连接)",
+            domain,
+            host,
+            endpoints.len()
+        );
 
         // 获取或创建连接
         let mut tls_stream = match self.acquire_connection(host) {
@@ -327,7 +333,7 @@ impl DohClient {
                 Err(e) => {
                     debug!("DoH 查询失败 ({} via {}): {}", endpoint.name, host, e);
                     connection_ok = false;
-                    break;  // 连接出问题，停掉后续查询
+                    break; // 连接出问题，停掉后续查询
                 }
             }
         }
@@ -350,13 +356,14 @@ impl DohClient {
 
         match provider_name {
             Some(name) => {
-                let matched: Vec<&DohEndpoint> = self.endpoints
-                    .iter()
-                    .filter(|e| e.name == name)
-                    .collect();
+                let matched: Vec<&DohEndpoint> =
+                    self.endpoints.iter().filter(|e| e.name == name).collect();
 
                 if matched.is_empty() {
-                    warn!("dns_mapping 指定了提供商 '{}' 但未找到对应端点，使用默认分级策略", name);
+                    warn!(
+                        "dns_mapping 指定了提供商 '{}' 但未找到对应端点，使用默认分级策略",
+                        name
+                    );
                     // fall through to default split below
                 } else {
                     debug!("域名 {} 使用指定 DoH 提供商: {}", domain, name);
@@ -367,12 +374,10 @@ impl DohClient {
         }
 
         // 分离国内/国际端点
-        let mut domestic: Vec<&DohEndpoint> = self.endpoints.iter()
-            .filter(|e| !e.trusted)
-            .collect();
-        let mut international: Vec<&DohEndpoint> = self.endpoints.iter()
-            .filter(|e| e.trusted)
-            .collect();
+        let mut domestic: Vec<&DohEndpoint> =
+            self.endpoints.iter().filter(|e| !e.trusted).collect();
+        let mut international: Vec<&DohEndpoint> =
+            self.endpoints.iter().filter(|e| e.trusted).collect();
 
         domestic.sort_by_key(|e| e.priority);
         international.sort_by_key(|e| e.priority);
@@ -428,17 +433,13 @@ impl DohClient {
         let ip = self.get_doh_server_ip(host).await?;
         let addr = std::net::SocketAddr::new(ip, 443);
 
-        let tcp_stream = tokio::time::timeout(
-            DOH_TIMEOUT,
-            TcpStream::connect(addr),
-        ).await
+        let tcp_stream = tokio::time::timeout(DOH_TIMEOUT, TcpStream::connect(addr))
+            .await
             .map_err(|_| anyhow::anyhow!("DoH TCP 连接超时 ({})", host))??;
         tcp_stream.set_nodelay(true)?;
 
-        let tls_stream = tokio::time::timeout(
-            DOH_TIMEOUT,
-            self.establish_tls(tcp_stream, host),
-        ).await
+        let tls_stream = tokio::time::timeout(DOH_TIMEOUT, self.establish_tls(tcp_stream, host))
+            .await
             .map_err(|_| anyhow::anyhow!("DoH TLS 握手超时 ({})", host))??;
 
         Ok(tls_stream)
@@ -483,7 +484,10 @@ impl DohClient {
         }
 
         // 没预解析 IP，直接报错
-        debug!("DoH 服务器 {} 没有预解析 IP，请确保调用了 preresolve_doh_hosts() 或配置了 preset_ip", host);
+        debug!(
+            "DoH 服务器 {} 没有预解析 IP，请确保调用了 preresolve_doh_hosts() 或配置了 preset_ip",
+            host
+        );
         anyhow::bail!(
             "DoH 服务器 {} 没有预解析 IP。请确保：\n\
              1. 调用了 preresolve_doh_hosts() 方法，或\n\
@@ -552,7 +556,9 @@ impl DohClient {
         let mut total_body = body_received;
         while total_body < content_length {
             let n = tls_stream.read(&mut buf).await?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             response.extend_from_slice(&buf[..n]);
             total_body += n;
         }
@@ -563,7 +569,9 @@ impl DohClient {
 }
 
 fn extract_host(url: &str) -> Option<&str> {
-    let without_scheme = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
+    let without_scheme = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
     let host = without_scheme.split('/').next()?;
     Some(host.split(':').next()?)
 }
@@ -571,8 +579,7 @@ fn extract_host(url: &str) -> Option<&str> {
 // 找 HTTP 头结束位置（\r\n\r\n 的起始索引）
 fn find_header_end(data: &[u8]) -> Option<usize> {
     let separator = b"\r\n\r\n";
-    data.windows(separator.len())
-        .position(|w| w == separator)
+    data.windows(separator.len()).position(|w| w == separator)
 }
 
 // 从 HTTP 响应头解析 Content-Length
@@ -701,7 +708,12 @@ fn parse_dns_response(data: &[u8]) -> anyhow::Result<Vec<IpAddr>> {
 
         let rtype = u16::from_be_bytes([data[offset], data[offset + 1]]);
         let _rclass = u16::from_be_bytes([data[offset + 2], data[offset + 3]]);
-        let _ttl = u32::from_be_bytes([data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7]]);
+        let _ttl = u32::from_be_bytes([
+            data[offset + 4],
+            data[offset + 5],
+            data[offset + 6],
+            data[offset + 7],
+        ]);
         let rdlength = u16::from_be_bytes([data[offset + 8], data[offset + 9]]) as usize;
 
         offset += 10;
@@ -741,4 +753,3 @@ fn parse_dns_response(data: &[u8]) -> anyhow::Result<Vec<IpAddr>> {
 
     Ok(ips)
 }
-

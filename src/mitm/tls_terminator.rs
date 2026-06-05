@@ -22,10 +22,7 @@ impl std::fmt::Debug for DynamicCertResolver {
 }
 
 impl ResolvesServerCert for DynamicCertResolver {
-    fn resolve(
-        &self,
-        client_hello: rustls::server::ClientHello<'_>,
-    ) -> Option<Arc<CertifiedKey>> {
+    fn resolve(&self, client_hello: rustls::server::ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
         let domain = client_hello.server_name()?;
 
         debug!("动态证书解析: 请求域名 {}", domain);

@@ -53,38 +53,31 @@ impl SniSpoofConnector {
         real_domain: &str,
         fake_sni: &str,
     ) -> anyhow::Result<TlsStream<TcpStream>> {
-        debug!(
-            "SNI 伪装: 连接 {} (SNI={})",
-            real_domain, fake_sni
-        );
+        debug!("SNI 伪装: 连接 {} (SNI={})", real_domain, fake_sni);
 
         let ip = self.dns_resolver.resolve_best(real_domain).await?;
         let addr = std::net::SocketAddr::new(ip, 443);
 
         debug!("SNI 伪装: 解析 {} -> {}", real_domain, addr);
 
-        let tcp_stream = match tokio::time::timeout(
-            self.connect_timeout,
-            TcpStream::connect(addr),
-        )
-        .await
-        {
-            Ok(Ok(stream)) => {
-                let _ = stream.set_nodelay(true);
-                stream
-            }
-            Ok(Err(e)) => {
-                anyhow::bail!("TCP 连接失败 {} ({}): {}", real_domain, ip, e);
-            }
-            Err(_) => {
-                anyhow::bail!(
-                    "TCP 连接超时 {} ({}, {}s)",
-                    real_domain,
-                    ip,
-                    self.connect_timeout.as_secs()
-                );
-            }
-        };
+        let tcp_stream =
+            match tokio::time::timeout(self.connect_timeout, TcpStream::connect(addr)).await {
+                Ok(Ok(stream)) => {
+                    let _ = stream.set_nodelay(true);
+                    stream
+                }
+                Ok(Err(e)) => {
+                    anyhow::bail!("TCP 连接失败 {} ({}): {}", real_domain, ip, e);
+                }
+                Err(_) => {
+                    anyhow::bail!(
+                        "TCP 连接超时 {} ({}, {}s)",
+                        real_domain,
+                        ip,
+                        self.connect_timeout.as_secs()
+                    );
+                }
+            };
 
         let connector = tokio_rustls::TlsConnector::from(self.insecure_config.clone());
         let tls_stream = tokio::time::timeout(
@@ -93,8 +86,15 @@ impl SniSpoofConnector {
                 rustls::pki_types::ServerName::try_from(fake_sni.to_string())?,
                 tcp_stream,
             ),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TLS 握手超时 (SNI={}, {}s)", fake_sni, self.connect_timeout.as_secs()))??;
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "TLS 握手超时 (SNI={}, {}s)",
+                fake_sni,
+                self.connect_timeout.as_secs()
+            )
+        })??;
 
         debug!(
             "SNI 伪装连接成功: {} (IP: {}, SNI={})",
@@ -116,10 +116,16 @@ impl SniSpoofConnector {
             anyhow::bail!("没有可用的候选 IP: {}", real_domain);
         }
 
-        match self.run_sni_happy_eyeballs(real_domain, fake_sni, &candidates).await {
+        match self
+            .run_sni_happy_eyeballs(real_domain, fake_sni, &candidates)
+            .await
+        {
             Ok(stream) => return Ok(stream),
             Err(first_err) => {
-                debug!("国内 IP 全部失败 for {} (SNI={}), 尝试国际 DoH: {}", real_domain, fake_sni, first_err);
+                debug!(
+                    "国内 IP 全部失败 for {} (SNI={}), 尝试国际 DoH: {}",
+                    real_domain, fake_sni, first_err
+                );
             }
         }
 
@@ -129,8 +135,13 @@ impl SniSpoofConnector {
             anyhow::bail!("国际 DoH 也未返回 IP: {}", real_domain);
         }
 
-        info!("国际回退: {} 获得 {} 个国际 IP 重试 SNI 伪装", real_domain, international_ips.len());
-        self.run_sni_happy_eyeballs(real_domain, fake_sni, &international_ips).await
+        info!(
+            "国际回退: {} 获得 {} 个国际 IP 重试 SNI 伪装",
+            real_domain,
+            international_ips.len()
+        );
+        self.run_sni_happy_eyeballs(real_domain, fake_sni, &international_ips)
+            .await
     }
 
     async fn run_sni_happy_eyeballs(
@@ -141,11 +152,15 @@ impl SniSpoofConnector {
     ) -> anyhow::Result<TlsStream<TcpStream>> {
         debug!(
             "SNI 伪装: Happy Eyeballs {} (SNI={}, {} 个候选)",
-            real_domain, fake_sni, candidates.len()
+            real_domain,
+            fake_sni,
+            candidates.len()
         );
 
         if candidates.len() == 1 {
-            return self.try_sni_connect(real_domain, fake_sni, candidates[0]).await;
+            return self
+                .try_sni_connect(real_domain, fake_sni, candidates[0])
+                .await;
         }
 
         let real_domain = Arc::new(real_domain.to_string());
@@ -153,7 +168,8 @@ impl SniSpoofConnector {
         let insecure_config = self.insecure_config.clone();
         let connect_timeout = self.connect_timeout;
 
-        type PendingFuture = Pin<Box<dyn std::future::Future<Output = anyhow::Result<TlsStream<TcpStream>>> + Send>>;
+        type PendingFuture =
+            Pin<Box<dyn std::future::Future<Output = anyhow::Result<TlsStream<TcpStream>>> + Send>>;
         let mut pending: FuturesUnordered<PendingFuture> = FuturesUnordered::new();
         let mut next_idx: usize = 0;
 
@@ -221,11 +237,11 @@ impl SniSpoofConnector {
         let addr = std::net::SocketAddr::new(ip, 443);
         debug!("SNI 伪装: 尝试连接 {} ({})", real_domain, addr);
 
-        let tcp_stream = tokio::time::timeout(
-            connect_timeout,
-            TcpStream::connect(addr),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, connect_timeout.as_secs()))??;
+        let tcp_stream = tokio::time::timeout(connect_timeout, TcpStream::connect(addr))
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, connect_timeout.as_secs())
+            })??;
 
         let _ = tcp_stream.set_nodelay(true);
 
@@ -236,8 +252,15 @@ impl SniSpoofConnector {
                 rustls::pki_types::ServerName::try_from(fake_sni.to_string())?,
                 tcp_stream,
             ),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TLS 握手超时 (SNI={}, {}s)", fake_sni, connect_timeout.as_secs()))??;
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "TLS 握手超时 (SNI={}, {}s)",
+                fake_sni,
+                connect_timeout.as_secs()
+            )
+        })??;
 
         debug!(
             "SNI 伪装连接成功: {} (IP: {}, SNI={})",
@@ -257,11 +280,11 @@ impl SniSpoofConnector {
         let addr = std::net::SocketAddr::new(ip, 443);
         debug!("SNI 伪装: 尝试连接 {} ({})", real_domain, addr);
 
-        let tcp_stream = tokio::time::timeout(
-            self.connect_timeout,
-            TcpStream::connect(addr),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, self.connect_timeout.as_secs()))??;
+        let tcp_stream = tokio::time::timeout(self.connect_timeout, TcpStream::connect(addr))
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, self.connect_timeout.as_secs())
+            })??;
 
         let _ = tcp_stream.set_nodelay(true);
 
@@ -272,8 +295,15 @@ impl SniSpoofConnector {
                 rustls::pki_types::ServerName::try_from(fake_sni.to_string())?,
                 tcp_stream,
             ),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TLS 握手超时 (SNI={}, {}s)", fake_sni, self.connect_timeout.as_secs()))??;
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "TLS 握手超时 (SNI={}, {}s)",
+                fake_sni,
+                self.connect_timeout.as_secs()
+            )
+        })??;
 
         debug!(
             "SNI 伪装连接成功: {} (IP: {}, SNI={})",
@@ -359,4 +389,3 @@ impl rustls::client::danger::ServerCertVerifier for NoCertVerifier {
         ]
     }
 }
-

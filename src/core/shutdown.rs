@@ -73,7 +73,11 @@ impl CrashRecovery {
         let temp_marker = data_dir.join("proxy-settings.bak");
         if temp_marker.exists() {
             if let Err(e) = std::fs::remove_file(&temp_marker) {
-                warn!("Failed to remove temp file {}: {}", temp_marker.display(), e);
+                warn!(
+                    "Failed to remove temp file {}: {}",
+                    temp_marker.display(),
+                    e
+                );
             }
         }
     }
@@ -104,10 +108,10 @@ impl ShutdownSignal {
             use tokio::signal::unix::{signal, SignalKind};
 
             // 注册 SIGINT 处理器（覆盖默认行为）
-            let mut sigint = signal(SignalKind::interrupt())
-                .expect("Failed to setup SIGINT handler");
-            let mut sigterm = signal(SignalKind::terminate())
-                .expect("Failed to setup SIGTERM handler");
+            let mut sigint =
+                signal(SignalKind::interrupt()).expect("Failed to setup SIGINT handler");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
 
             tokio::select! {
                 // Ctrl+C (SIGINT)
@@ -140,4 +144,3 @@ impl ShutdownSignal {
         }
     }
 }
-

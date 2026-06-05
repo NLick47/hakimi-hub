@@ -146,7 +146,10 @@ impl IpProber {
 
         if success {
             // 成功，重置失败计数
-            let prev = self.ipv6_status.consecutive_failures.swap(0, Ordering::Relaxed);
+            let prev = self
+                .ipv6_status
+                .consecutive_failures
+                .swap(0, Ordering::Relaxed);
             if prev > 0 {
                 debug!("IPv6 探测成功，重置失败计数（之前: {}）", prev);
             }
@@ -158,8 +161,15 @@ impl IpProber {
             }
         } else {
             // 失败，增加计数
-            let failures = self.ipv6_status.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
-            debug!("IPv6 探测失败，连续失败次数: {}/{}", failures, self.ipv6_failure_threshold);
+            let failures = self
+                .ipv6_status
+                .consecutive_failures
+                .fetch_add(1, Ordering::Relaxed)
+                + 1;
+            debug!(
+                "IPv6 探测失败，连续失败次数: {}/{}",
+                failures, self.ipv6_failure_threshold
+            );
 
             // 达到阈值，禁用 IPv6
             if failures >= self.ipv6_failure_threshold {
@@ -181,11 +191,7 @@ impl IpProber {
     // - 收集到 3 个可达结果后立即返回（保证有足够候选选最优）
     // - 或等待超过 200ms 后返回已收集的结果（避免等太久）
     // - 如果 IP 数量 <= 3，等待全部完成
-    pub async fn select_ranked_ips(
-        &self,
-        domain: &str,
-        ips: Vec<IpAddr>,
-    ) -> Vec<IpAddr> {
+    pub async fn select_ranked_ips(&self, domain: &str, ips: Vec<IpAddr>) -> Vec<IpAddr> {
         if ips.is_empty() {
             return vec![];
         }
@@ -247,8 +253,15 @@ impl IpProber {
             }
 
             // 快速返回条件：已收集足够结果 且 超过截止时间
-            if fast_return_enabled && results.len() >= MIN_RESULTS_FOR_FAST_RETURN && Instant::now() >= deadline {
-                debug!("快速返回: 已收集 {} 个可达 IP (共 {} 个待探测)", results.len(), total);
+            if fast_return_enabled
+                && results.len() >= MIN_RESULTS_FOR_FAST_RETURN
+                && Instant::now() >= deadline
+            {
+                debug!(
+                    "快速返回: 已收集 {} 个可达 IP (共 {} 个待探测)",
+                    results.len(),
+                    total
+                );
                 break;
             }
         }
@@ -277,29 +290,29 @@ impl IpProber {
         results.sort_by_key(|(_, lat)| *lat);
         let ranked: Vec<IpAddr> = results.into_iter().map(|(ip, _)| ip).collect();
 
-        self.best_ip_cache.insert(domain.to_string(), BestIpValue { ip: ranked[0] });
-        debug!("IP 排名: {} -> [{}]", domain, ranked.iter()
-            .map(|ip| ip.to_string()).collect::<Vec<_>>().join(", "));
+        self.best_ip_cache
+            .insert(domain.to_string(), BestIpValue { ip: ranked[0] });
+        debug!(
+            "IP 排名: {} -> [{}]",
+            domain,
+            ranked
+                .iter()
+                .map(|ip| ip.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
 
         ranked
     }
 
     // 强制重测，返回排序后的 IP 列表
-    pub async fn force_reprobe_ranked(
-        &self,
-        domain: &str,
-        ips: Vec<IpAddr>,
-    ) -> Vec<IpAddr> {
+    pub async fn force_reprobe_ranked(&self, domain: &str, ips: Vec<IpAddr>) -> Vec<IpAddr> {
         self.best_ip_cache.remove(domain);
         self.select_ranked_ips(domain, ips).await
     }
 
     // 对多个 IP 测速，返回延迟最低的可达 IP
-    pub async fn select_best_ip(
-        &self,
-        domain: &str,
-        ips: Vec<IpAddr>,
-    ) -> anyhow::Result<IpAddr> {
+    pub async fn select_best_ip(&self, domain: &str, ips: Vec<IpAddr>) -> anyhow::Result<IpAddr> {
         if ips.is_empty() {
             anyhow::bail!("没有可用的 IP 地址: {}", domain);
         }
@@ -318,10 +331,8 @@ impl IpProber {
         // 选择最佳
         match self.pick_best(&probe_results)? {
             IpSelectResult::BestIp(best_ip) => {
-                self.best_ip_cache.insert(
-                    domain.to_string(),
-                    BestIpValue { ip: best_ip },
-                );
+                self.best_ip_cache
+                    .insert(domain.to_string(), BestIpValue { ip: best_ip });
 
                 debug!("最佳 IP: {} -> {}", domain, best_ip);
                 Ok(best_ip)
@@ -363,10 +374,8 @@ impl IpProber {
         let result = self.pick_best(&probe_results)?;
 
         if let IpSelectResult::BestIp(best_ip) = &result {
-            self.best_ip_cache.insert(
-                domain.to_string(),
-                BestIpValue { ip: *best_ip },
-            );
+            self.best_ip_cache
+                .insert(domain.to_string(), BestIpValue { ip: *best_ip });
 
             debug!("最佳 IP: {} -> {}", domain, best_ip);
         } else {
@@ -381,11 +390,7 @@ impl IpProber {
     }
 
     // 强制重测
-    pub async fn force_reprobe(
-        &self,
-        domain: &str,
-        ips: Vec<IpAddr>,
-    ) -> anyhow::Result<IpAddr> {
+    pub async fn force_reprobe(&self, domain: &str, ips: Vec<IpAddr>) -> anyhow::Result<IpAddr> {
         self.best_ip_cache.remove(domain);
         self.select_best_ip(domain, ips).await
     }
@@ -436,12 +441,23 @@ impl IpProber {
             ips_to_probe.len(),
             ipv4_count,
             ipv6_count,
-            if !probe_ipv6 && !must_probe_ipv6 { " [已禁用]" } else { "" },
-            if must_probe_ipv6 { " [仅 IPv6，强制探测]" } else { "" },
+            if !probe_ipv6 && !must_probe_ipv6 {
+                " [已禁用]"
+            } else {
+                ""
+            },
+            if must_probe_ipv6 {
+                " [仅 IPv6，强制探测]"
+            } else {
+                ""
+            },
         );
 
         // 并发探测
-        let futures: Vec<_> = ips_to_probe.iter().map(|ip| self.probe_single(*ip)).collect();
+        let futures: Vec<_> = ips_to_probe
+            .iter()
+            .map(|ip| self.probe_single(*ip))
+            .collect();
         let results = futures::future::join_all(futures).await;
 
         let probe_results: Vec<IpProbeResult> = ips_to_probe
@@ -497,4 +513,3 @@ impl IpProber {
         self.best_ip_cache.clear();
     }
 }
-

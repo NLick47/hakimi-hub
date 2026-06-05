@@ -30,10 +30,8 @@ impl TlsOrigin {
         connect_timeout_secs: u64,
     ) -> Self {
         let tls_config = Arc::new(Self::build_shared_tls_config());
-        let sni_spoof_connector = SniSpoofConnector::new(
-            dns_resolver.clone(),
-            connect_timeout_secs,
-        );
+        let sni_spoof_connector =
+            SniSpoofConnector::new(dns_resolver.clone(), connect_timeout_secs);
 
         Self {
             dns_resolver,
@@ -95,7 +93,10 @@ impl TlsOrigin {
     }
 
     // 建 TLS 连接，支持多 IP 竞速 + 国际 DoH 回退 (RFC 8305 Happy Eyeballs v2)
-    pub async fn connect_with_fallback(&self, domain: &str) -> anyhow::Result<TlsStream<TcpStream>> {
+    pub async fn connect_with_fallback(
+        &self,
+        domain: &str,
+    ) -> anyhow::Result<TlsStream<TcpStream>> {
         let candidates = self.dns_resolver.get_candidates(domain).await;
 
         if candidates.is_empty() {
@@ -105,7 +106,10 @@ impl TlsOrigin {
         match self.run_happy_eyeballs(domain, &candidates).await {
             Ok(stream) => return Ok(stream),
             Err(first_err) => {
-                debug!("国内 IP 全部失败 for {}, 尝试国际 DoH: {}", domain, first_err);
+                debug!(
+                    "国内 IP 全部失败 for {}, 尝试国际 DoH: {}",
+                    domain, first_err
+                );
             }
         }
 
@@ -115,7 +119,11 @@ impl TlsOrigin {
             anyhow::bail!("国际 DoH 也未返回 IP: {}", domain);
         }
 
-        info!("国际回退: {} 获得 {} 个国际 IP 重试", domain, international_ips.len());
+        info!(
+            "国际回退: {} 获得 {} 个国际 IP 重试",
+            domain,
+            international_ips.len()
+        );
         self.run_happy_eyeballs(domain, &international_ips).await
     }
 
@@ -135,7 +143,10 @@ impl TlsOrigin {
         match self.run_happy_eyeballs(domain, &ips).await {
             Ok(stream) => return Ok(stream),
             Err(first_err) => {
-                debug!("预解析 IP 全部失败 for {}, 尝试国际 DoH: {}", domain, first_err);
+                debug!(
+                    "预解析 IP 全部失败 for {}, 尝试国际 DoH: {}",
+                    domain, first_err
+                );
             }
         }
 
@@ -146,7 +157,11 @@ impl TlsOrigin {
             anyhow::bail!("国际 DoH 也未返回 IP: {}", domain);
         }
 
-        info!("国际回退: {} 获得 {} 个国际 IP 重试", domain, international_ips.len());
+        info!(
+            "国际回退: {} 获得 {} 个国际 IP 重试",
+            domain,
+            international_ips.len()
+        );
         self.run_happy_eyeballs(domain, &international_ips).await
     }
 
@@ -155,7 +170,11 @@ impl TlsOrigin {
         domain: &str,
         candidates: &[std::net::IpAddr],
     ) -> anyhow::Result<TlsStream<TcpStream>> {
-        debug!("Happy Eyeballs 连接 {} (共 {} 个候选)", domain, candidates.len());
+        debug!(
+            "Happy Eyeballs 连接 {} (共 {} 个候选)",
+            domain,
+            candidates.len()
+        );
 
         if candidates.len() == 1 {
             return self.try_tls_connect(domain, candidates[0]).await;
@@ -165,7 +184,8 @@ impl TlsOrigin {
         let tls_config = self.tls_config.clone();
         let connect_timeout = self.connect_timeout;
 
-        type PendingFuture = Pin<Box<dyn std::future::Future<Output = anyhow::Result<TlsStream<TcpStream>>> + Send>>;
+        type PendingFuture =
+            Pin<Box<dyn std::future::Future<Output = anyhow::Result<TlsStream<TcpStream>>> + Send>>;
         let mut pending: FuturesUnordered<PendingFuture> = FuturesUnordered::new();
         let mut next_idx: usize = 0;
 
@@ -227,11 +247,11 @@ impl TlsOrigin {
         let addr = std::net::SocketAddr::new(ip, 443);
         debug!("尝试 TLS 连接 {} ({})", domain, addr);
 
-        let tcp_stream = tokio::time::timeout(
-            connect_timeout,
-            TcpStream::connect(addr),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, connect_timeout.as_secs()))??;
+        let tcp_stream = tokio::time::timeout(connect_timeout, TcpStream::connect(addr))
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, connect_timeout.as_secs())
+            })??;
 
         if let Err(e) = tcp_stream.set_nodelay(true) {
             warn!("设置 TCP_NODELAY 失败: {}", e);
@@ -244,23 +264,30 @@ impl TlsOrigin {
                 rustls::pki_types::ServerName::try_from(domain.to_string())?,
                 tcp_stream,
             ),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TLS 握手超时 ({}, {}s)", domain, connect_timeout.as_secs()))??;
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!("TLS 握手超时 ({}, {}s)", domain, connect_timeout.as_secs())
+        })??;
 
         debug!("TLS 连接成功: {} (IP: {})", domain, ip);
         Ok(tls_stream)
     }
 
     // 单 IP 连接
-    async fn try_tls_connect(&self, domain: &str, ip: std::net::IpAddr) -> anyhow::Result<TlsStream<TcpStream>> {
+    async fn try_tls_connect(
+        &self,
+        domain: &str,
+        ip: std::net::IpAddr,
+    ) -> anyhow::Result<TlsStream<TcpStream>> {
         let addr = std::net::SocketAddr::new(ip, 443);
         debug!("尝试 TLS 连接 {} ({})", domain, addr);
 
-        let tcp_stream = tokio::time::timeout(
-            self.connect_timeout,
-            TcpStream::connect(addr),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, self.connect_timeout.as_secs()))??;
+        let tcp_stream = tokio::time::timeout(self.connect_timeout, TcpStream::connect(addr))
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!("TCP 连接超时 ({}, {}s)", ip, self.connect_timeout.as_secs())
+            })??;
 
         if let Err(e) = tcp_stream.set_nodelay(true) {
             warn!("设置 TCP_NODELAY 失败: {}", e);
@@ -273,15 +300,26 @@ impl TlsOrigin {
                 rustls::pki_types::ServerName::try_from(domain.to_string())?,
                 tcp_stream,
             ),
-        ).await
-            .map_err(|_| anyhow::anyhow!("TLS 握手超时 ({}, {}s)", domain, self.connect_timeout.as_secs()))??;
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "TLS 握手超时 ({}, {}s)",
+                domain,
+                self.connect_timeout.as_secs()
+            )
+        })??;
 
         debug!("TLS 连接成功: {} (IP: {})", domain, ip);
         Ok(tls_stream)
     }
 
     // TCP 隧道，支持 IP 回退 + 国际 DoH 兜底
-    pub async fn connect_tcp_with_fallback(&self, domain: &str, port: u16) -> anyhow::Result<TcpStream> {
+    pub async fn connect_tcp_with_fallback(
+        &self,
+        domain: &str,
+        port: u16,
+    ) -> anyhow::Result<TcpStream> {
         let candidates = self.dns_resolver.get_candidates(domain).await;
 
         if candidates.is_empty() {
@@ -299,21 +337,27 @@ impl TlsOrigin {
             anyhow::bail!("国际 DoH 也未返回 IP: {}", domain);
         }
 
-        info!("国际回退: {} 获得 {} 个国际 IP 重试 TCP", domain, international_ips.len());
+        info!(
+            "国际回退: {} 获得 {} 个国际 IP 重试 TCP",
+            domain,
+            international_ips.len()
+        );
         self.try_connect_tcp(domain, port, &international_ips).await
     }
 
-    async fn try_connect_tcp(&self, domain: &str, port: u16, ips: &[std::net::IpAddr]) -> anyhow::Result<TcpStream> {
+    async fn try_connect_tcp(
+        &self,
+        domain: &str,
+        port: u16,
+        ips: &[std::net::IpAddr],
+    ) -> anyhow::Result<TcpStream> {
         let mut last_err: Option<anyhow::Error> = None;
 
         for ip in ips {
             let addr = std::net::SocketAddr::new(*ip, port);
             debug!("尝试 TCP 连接 {} ({})", domain, addr);
 
-            match tokio::time::timeout(
-                self.connect_timeout,
-                TcpStream::connect(addr),
-            ).await {
+            match tokio::time::timeout(self.connect_timeout, TcpStream::connect(addr)).await {
                 Ok(Ok(stream)) => {
                     let _ = stream.set_nodelay(true);
                     debug!("TCP 连接成功: {}:{} (IP: {})", domain, port, ip);
@@ -324,8 +368,17 @@ impl TlsOrigin {
                     last_err = Some(e.into());
                 }
                 Err(_) => {
-                    warn!("TCP 连接超时 {}:{} ({}, {}s)", domain, port, ip, self.connect_timeout.as_secs());
-                    last_err = Some(anyhow::anyhow!("连接超时 ({}s)", self.connect_timeout.as_secs()));
+                    warn!(
+                        "TCP 连接超时 {}:{} ({}, {}s)",
+                        domain,
+                        port,
+                        ip,
+                        self.connect_timeout.as_secs()
+                    );
+                    last_err = Some(anyhow::anyhow!(
+                        "连接超时 ({}s)",
+                        self.connect_timeout.as_secs()
+                    ));
                 }
             }
         }
@@ -339,7 +392,9 @@ impl TlsOrigin {
         real_domain: &str,
         fake_sni: &str,
     ) -> anyhow::Result<TlsStream<TcpStream>> {
-        self.sni_spoof_connector.connect_with_fallback(real_domain, fake_sni).await
+        self.sni_spoof_connector
+            .connect_with_fallback(real_domain, fake_sni)
+            .await
     }
 
     pub fn sni_spoof_connector(&self) -> &SniSpoofConnector {

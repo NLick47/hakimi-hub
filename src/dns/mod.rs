@@ -90,10 +90,7 @@ pub fn filter_ips(ips: &[IpAddr], level: IpFilterLevel) -> Vec<IpAddr> {
     // Fallback protection: if all IPs are filtered, return original list
     // This prevents breaking connectivity when the filter is too aggressive
     if filtered.is_empty() && !ips.is_empty() {
-        tracing::warn!(
-            "IP 过滤后结果为空，回退到原始列表（{} 个 IP）",
-            ips.len()
-        );
+        tracing::warn!("IP 过滤后结果为空，回退到原始列表（{} 个 IP）", ips.len());
         return ips.to_vec();
     }
 
@@ -105,4 +102,3 @@ pub fn filter_ips(ips: &[IpAddr], level: IpFilterLevel) -> Vec<IpAddr> {
 pub fn filter_suspicious(ips: &[IpAddr]) -> Vec<IpAddr> {
     filter_ips(ips, IpFilterLevel::PublicOnly)
 }
-

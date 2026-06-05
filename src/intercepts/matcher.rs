@@ -193,7 +193,10 @@ impl InterceptMatcher {
         let mut wildcard_rules = Vec::new();
 
         for mut rule in rules {
-            let path_pattern = rule.from_pattern.as_ref().map(|p| SimplePattern::from_pattern(p));
+            let path_pattern = rule
+                .from_pattern
+                .as_ref()
+                .map(|p| SimplePattern::from_pattern(p));
 
             rule.from = rule.from.to_lowercase();
 
@@ -206,7 +209,10 @@ impl InterceptMatcher {
                     action: rule.action,
                 });
             } else if rule.from.contains('*') {
-                let star_pos = rule.from.find('*').expect("wildcard pattern contains '*' guaranteed by contains check");
+                let star_pos = rule
+                    .from
+                    .find('*')
+                    .expect("wildcard pattern contains '*' guaranteed by contains check");
                 wildcard_rules.push(WildcardRule {
                     pattern: rule.from,
                     star_pos,
@@ -271,7 +277,9 @@ impl InterceptMatcher {
     fn wildcard_matches(&self, rule: &WildcardRule, domain: &str) -> bool {
         let prefix = &rule.pattern[..rule.star_pos];
         let suffix = &rule.pattern[rule.star_pos + 1..];
-        domain.starts_with(prefix) && domain.ends_with(suffix) && domain.len() >= prefix.len() + suffix.len()
+        domain.starts_with(prefix)
+            && domain.ends_with(suffix)
+            && domain.len() >= prefix.len() + suffix.len()
     }
 
     #[inline]
@@ -282,4 +290,3 @@ impl InterceptMatcher {
         }
     }
 }
-

@@ -188,20 +188,13 @@ impl ProxyGuard {
 
 impl Drop for ProxyGuard {
     fn drop(&mut self) {
-        let was_set = self
-            .set_by_us
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let was_set = self.set_by_us.lock().unwrap_or_else(|e| e.into_inner());
 
         if !*was_set {
             return;
         }
 
-        let saved = self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take();
+        let saved = self.state.lock().unwrap_or_else(|e| e.into_inner()).take();
 
         if let Some(ref saved) = saved {
             if let Ok(key) = open_settings_key() {

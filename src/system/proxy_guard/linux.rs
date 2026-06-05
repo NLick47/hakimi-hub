@@ -21,7 +21,10 @@ impl ProxyGuard {
     }
 
     pub async fn set_proxy(&self, port: u16) -> anyhow::Result<()> {
-        info!("Linux 下请手动配置系统代理，PAC 地址: http://127.0.0.1:{}/pac", port);
+        info!(
+            "Linux 下请手动配置系统代理，PAC 地址: http://127.0.0.1:{}/pac",
+            port
+        );
         *self.set_by_us.lock().unwrap() = true;
         Ok(())
     }
@@ -36,7 +39,9 @@ impl ProxyGuard {
     }
 }
 
-impl Drop for ProxyGuard {}
+impl Drop for ProxyGuard {
+    fn drop(&mut self) {}
+}
 
 pub fn restore_proxy_settings() -> anyhow::Result<()> {
     Ok(())

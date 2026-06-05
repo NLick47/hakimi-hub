@@ -4,41 +4,94 @@ use crate::utils;
 
 // ─── Default value functions ────────────────────────────────────────
 
-fn default_true() -> bool { true }
-fn default_false() -> bool { false }
+fn default_true() -> bool {
+    true
+}
+fn default_false() -> bool {
+    false
+}
 
-fn default_proxy_bind() -> String { "127.0.0.1".to_string() }
-fn default_proxy_port() -> u16 { 2830 }
-fn default_proxy_max_connections() -> usize { 0 }
-fn default_proxy_idle_timeout() -> u64 { 300 }
+fn default_proxy_bind() -> String {
+    "127.0.0.1".to_string()
+}
+fn default_proxy_port() -> u16 {
+    2830
+}
+fn default_proxy_max_connections() -> usize {
+    0
+}
+fn default_proxy_idle_timeout() -> u64 {
+    300
+}
 
-fn default_banner_theme() -> String { "pink".to_string() }
+fn default_banner_theme() -> String {
+    "pink".to_string()
+}
 
-fn default_dns_probe_timeout() -> u64 { 8 }
-fn default_dns_max_concurrent() -> usize { 32 }
-fn default_dns_cache_ttl() -> u64 { 300 }
-fn default_dns_probe_interval() -> u64 { 300 }
-fn default_dns_sni_spoof() -> String { "www.baidu.com".to_string() }
-fn default_dns_connect_timeout() -> u64 { 10 }
-fn default_max_cache_entries() -> Option<usize> { Some(1000) }
-fn default_ipv6_failure_threshold() -> u32 { 3 }
-fn default_ipv6_recovery_secs() -> u64 { 300 }
-fn default_ipv6_enabled() -> bool { false }  // 默认禁用 IPv6
+fn default_dns_probe_timeout() -> u64 {
+    8
+}
+fn default_dns_max_concurrent() -> usize {
+    32
+}
+fn default_dns_cache_ttl() -> u64 {
+    300
+}
+fn default_dns_probe_interval() -> u64 {
+    300
+}
+fn default_dns_sni_spoof() -> String {
+    "www.baidu.com".to_string()
+}
+fn default_dns_connect_timeout() -> u64 {
+    10
+}
+fn default_max_cache_entries() -> Option<usize> {
+    Some(1000)
+}
+fn default_ipv6_failure_threshold() -> u32 {
+    3
+}
+fn default_ipv6_recovery_secs() -> u64 {
+    300
+}
+fn default_ipv6_enabled() -> bool {
+    false
+} // 默认禁用 IPv6
 
-fn default_cert_key_size() -> usize { 4096 }
-fn default_cert_validity() -> u32 { 7 }
-fn default_cert_max_cache() -> usize { 1000 }
+fn default_cert_key_size() -> usize {
+    4096
+}
+fn default_cert_validity() -> u32 {
+    7
+}
+fn default_cert_max_cache() -> usize {
+    1000
+}
 
-fn default_rules_update_interval() -> u64 { 24 }
+fn default_rules_update_interval() -> u64 {
+    24
+}
 
-fn default_log_level() -> String { "info".to_string() }
-fn default_log_file() -> String { "logs/hakimi-hub.log".to_string() }
-fn default_log_retention() -> u64 { 7 }
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_log_file() -> String {
+    "logs/hakimi-hub.log".to_string()
+}
+fn default_log_retention() -> u64 {
+    7
+}
 
-fn default_cache_ttl_days() -> u64 { 30 }
-fn default_cache_max_size_mb() -> usize { 500 }
-fn default_cache_max_file_size_mb() -> usize { 10 }
-
+fn default_cache_ttl_days() -> u64 {
+    30
+}
+fn default_cache_max_size_mb() -> usize {
+    500
+}
+fn default_cache_max_file_size_mb() -> usize {
+    10
+}
 
 // ─── Banner Config ──────────────────────────────────────────────────
 
@@ -51,7 +104,9 @@ pub struct BannerConfig {
 
 impl Default for BannerConfig {
     fn default() -> Self {
-        Self { theme: default_banner_theme() }
+        Self {
+            theme: default_banner_theme(),
+        }
     }
 }
 
@@ -166,7 +221,8 @@ impl AppConfig {
 # 拦截示例:
 # from = "translate.google.com"
 # action = { Abort = true }
-"##.to_string()
+"##
+        .to_string()
     }
 }
 
@@ -197,10 +253,7 @@ pub enum InterceptAction {
     /// 镜像站代理（单镜像）
     Proxy { mirror: String },
     /// SNI 伪装
-    SniSpoof {
-        sni: String,
-        real_host: String,
-    },
+    SniSpoof { sni: String, real_host: String },
     /// HTTP 重定向
     Redirect { target: String },
     /// 直接关闭连接
@@ -215,17 +268,23 @@ impl InterceptsConfig {
                 InterceptRule {
                     from: "github.com".into(),
                     from_pattern: Some(r"^/[^/]+/[^/]+/releases/download/.*".into()),
-                    action: InterceptAction::Proxy { mirror: "v4.gh-proxy.org".into() },
+                    action: InterceptAction::Proxy {
+                        mirror: "v4.gh-proxy.org".into(),
+                    },
                 },
                 InterceptRule {
                     from: "github.com".into(),
                     from_pattern: Some(r"^/[^/]+/[^/]+/archive/.*".into()),
-                    action: InterceptAction::Proxy { mirror: "v4.gh-proxy.org".into() },
+                    action: InterceptAction::Proxy {
+                        mirror: "v4.gh-proxy.org".into(),
+                    },
                 },
                 InterceptRule {
                     from: "codeload.github.com".into(),
                     from_pattern: Some(r"^/.*".into()),
-                    action: InterceptAction::Proxy { mirror: "v4.gh-proxy.org".into() },
+                    action: InterceptAction::Proxy {
+                        mirror: "v4.gh-proxy.org".into(),
+                    },
                 },
                 InterceptRule {
                     from: "github.com".into(),
@@ -275,7 +334,6 @@ impl InterceptsConfig {
                         real_host: "*.githubusercontent.com".into(),
                     },
                 },
-
                 // ─── Steam 加速规则 ───────────────────────────────────────
                 InterceptRule {
                     from: "store.steampowered.com".into(),
@@ -687,4 +745,3 @@ impl Default for CacheConfig {
         }
     }
 }
-

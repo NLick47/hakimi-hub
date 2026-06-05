@@ -215,21 +215,14 @@ impl ProxyGuard {
 impl Drop for ProxyGuard {
     fn drop(&mut self) {
         // 使用与 Windows 一致的逻辑，先检查 was_set 标志
-        let was_set = self
-            .set_by_us
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let was_set = self.set_by_us.lock().unwrap_or_else(|e| e.into_inner());
 
         if !*was_set {
             return;
         }
 
         // 获取保存的状态
-        let saved = self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take();
+        let saved = self.state.lock().unwrap_or_else(|e| e.into_inner()).take();
 
         if let Some(ref saved) = saved {
             let services = get_network_services();

@@ -61,7 +61,11 @@ impl CertificateAuthority {
 
     // 解析 PEM，重建证书对象
     // 注意：key_size 用传入参数，别硬编码
-    fn load_existing_ca(_cert_path: &Path, key_path: &Path, key_size: usize) -> anyhow::Result<Self> {
+    fn load_existing_ca(
+        _cert_path: &Path,
+        key_path: &Path,
+        key_size: usize,
+    ) -> anyhow::Result<Self> {
         let key_pem = std::fs::read_to_string(key_path)
             .map_err(|e| anyhow::anyhow!("读取 CA 私钥文件失败: {}", e))?;
 
@@ -70,8 +74,12 @@ impl CertificateAuthority {
 
         let mut params = CertificateParams::new(Vec::new())
             .map_err(|e| anyhow::anyhow!("创建证书参数失败: {}", e))?;
-        params.distinguished_name.push(DnType::CommonName, "Hakimi Hub CA");
-        params.distinguished_name.push(DnType::OrganizationName, "Hakimi Hub");
+        params
+            .distinguished_name
+            .push(DnType::CommonName, "Hakimi Hub CA");
+        params
+            .distinguished_name
+            .push(DnType::OrganizationName, "Hakimi Hub");
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         params.not_before = rcgen::date_time_ymd(2024, 1, 1);
         params.not_after = rcgen::date_time_ymd(2034, 1, 1);
@@ -83,15 +91,19 @@ impl CertificateAuthority {
         Ok(Self {
             key_pair,
             cert,
-            key_size,  // 用参数，别硬编码 4096
+            key_size, // 用参数，别硬编码 4096
         })
     }
 
     // 生成新的根 CA
     fn generate(key_size: usize) -> anyhow::Result<Self> {
         let mut params = CertificateParams::new(Vec::new())?;
-        params.distinguished_name.push(DnType::CommonName, "Hakimi Hub CA");
-        params.distinguished_name.push(DnType::OrganizationName, "Hakimi Hub");
+        params
+            .distinguished_name
+            .push(DnType::CommonName, "Hakimi Hub CA");
+        params
+            .distinguished_name
+            .push(DnType::OrganizationName, "Hakimi Hub");
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         params.not_before = rcgen::date_time_ymd(2024, 1, 1);
         params.not_after = rcgen::date_time_ymd(2034, 1, 1);
@@ -107,15 +119,21 @@ impl CertificateAuthority {
     }
 
     // 给域名签发证书
-    pub fn sign_domain_cert(&self, domain: &str, validity_days: u32) -> anyhow::Result<CertKeyPair> {
+    pub fn sign_domain_cert(
+        &self,
+        domain: &str,
+        validity_days: u32,
+    ) -> anyhow::Result<CertKeyPair> {
         debug!("正在为 {} 签发证书", domain);
 
         let mut params = CertificateParams::new(vec![domain.to_string()])?;
         params.distinguished_name.push(DnType::CommonName, domain);
 
-        params.subject_alt_names.push(rcgen::SanType::DnsName(rcgen::Ia5String::try_from(
-            domain.to_string(),
-        )?));
+        params
+            .subject_alt_names
+            .push(rcgen::SanType::DnsName(rcgen::Ia5String::try_from(
+                domain.to_string(),
+            )?));
 
         let now = chrono::Utc::now();
         params.not_before = rcgen::date_time_ymd(now.year(), now.month() as u8, now.day() as u8);
@@ -203,4 +221,3 @@ impl CertKeyPair {
             .ok_or_else(|| anyhow::anyhow!("PEM 中未找到私钥"))
     }
 }
-

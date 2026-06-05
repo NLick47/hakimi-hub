@@ -167,7 +167,12 @@ pub fn read_pid_file() -> std::io::Result<Option<u32>> {
         return Ok(None);
     }
     let content = fs::read_to_string(&pid_file)?;
-    let pid: u32 = match content.trim().splitn(2, '\n').next().and_then(|s| s.parse().ok()) {
+    let pid: u32 = match content
+        .trim()
+        .splitn(2, '\n')
+        .next()
+        .and_then(|s| s.parse().ok())
+    {
         Some(p) => p,
         None => {
             let _ = fs::remove_file(&pid_file);
@@ -190,11 +195,7 @@ fn is_process_alive(pid: u32) -> bool {
 
     #[link(name = "kernel32")]
     extern "system" {
-        fn OpenProcess(
-            dwDesiredAccess: u32,
-            bInheritHandle: i32,
-            dwProcessId: u32,
-        ) -> *mut c_void;
+        fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut c_void;
         fn CloseHandle(handle: *mut c_void) -> i32;
     }
 
@@ -229,11 +230,7 @@ fn get_process_start_time(pid: u32) -> Option<String> {
 
     #[link(name = "kernel32")]
     extern "system" {
-        fn OpenProcess(
-            dwDesiredAccess: u32,
-            bInheritHandle: i32,
-            dwProcessId: u32,
-        ) -> *mut c_void;
+        fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut c_void;
         fn GetProcessTimes(
             hProcess: *mut c_void,
             lpCreationTime: *mut FileTime,
@@ -250,27 +247,32 @@ fn get_process_start_time(pid: u32) -> Option<String> {
             return None;
         }
 
-        let mut creation = FileTime { dw_low_date_time: 0, dw_high_date_time: 0 };
-        let mut exit = FileTime { dw_low_date_time: 0, dw_high_date_time: 0 };
-        let mut kernel = FileTime { dw_low_date_time: 0, dw_high_date_time: 0 };
-        let mut user = FileTime { dw_low_date_time: 0, dw_high_date_time: 0 };
+        let mut creation = FileTime {
+            dw_low_date_time: 0,
+            dw_high_date_time: 0,
+        };
+        let mut exit = FileTime {
+            dw_low_date_time: 0,
+            dw_high_date_time: 0,
+        };
+        let mut kernel = FileTime {
+            dw_low_date_time: 0,
+            dw_high_date_time: 0,
+        };
+        let mut user = FileTime {
+            dw_low_date_time: 0,
+            dw_high_date_time: 0,
+        };
 
-        let result = GetProcessTimes(
-            handle,
-            &mut creation,
-            &mut exit,
-            &mut kernel,
-            &mut user,
-        );
+        let result = GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
         CloseHandle(handle);
 
         if result == 0 {
             return None;
         }
 
-        let start_ticks = ((creation.dw_high_date_time as u64) << 32)
-            | (creation.dw_low_date_time as u64);
+        let start_ticks =
+            ((creation.dw_high_date_time as u64) << 32) | (creation.dw_low_date_time as u64);
         Some(start_ticks.to_string())
     }
 }
-

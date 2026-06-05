@@ -39,7 +39,10 @@ impl GitConfig {
                 "http.https://github.com/.sslCAInfo",
                 &self.ca_cert_path.to_string_lossy(),
             )?;
-            info!("Git configured to trust local CA at {}", self.ca_cert_path.display());
+            info!(
+                "Git configured to trust local CA at {}",
+                self.ca_cert_path.display()
+            );
         } else {
             warn!(
                 "CA certificate not found at {}, Git SSL verification may fail",
@@ -96,7 +99,9 @@ impl GitConfig {
             .ok()?;
 
         if output.status.success() {
-            String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+            String::from_utf8(output.stdout)
+                .ok()
+                .map(|s| s.trim().to_string())
         } else {
             None
         }
@@ -147,4 +152,3 @@ pub fn teardown() -> Result<()> {
     };
     git_config.teardown()
 }
-

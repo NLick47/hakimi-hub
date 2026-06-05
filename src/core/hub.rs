@@ -9,19 +9,18 @@ use crate::cache::ResourceCache;
 use crate::core::config::AppConfig;
 use crate::core::shutdown::{CrashRecovery, ShutdownSignal};
 use crate::dns::resolver::DnsResolver;
+use crate::intercepts::matcher::InterceptMatcher;
+use crate::intercepts::mirror_health::MirrorHealthTracker;
 use crate::mitm::ca::CertificateAuthority;
 use crate::mitm::cert_cache::CertCache;
 use crate::mitm::tls_origin::TlsOrigin;
 use crate::mitm::tls_terminator::TlsTerminator;
-use crate::intercepts::matcher::InterceptMatcher;
-use crate::intercepts::mirror_health::MirrorHealthTracker;
 use crate::proxy::handler::HandlerContext;
 use crate::proxy::metrics::Metrics;
 use crate::proxy::server::ProxyServer;
 use crate::rules::builtin::DomainRules;
 use crate::system::proxy_guard::ProxyGuard;
 use crate::utils;
-
 
 pub struct HakimiHub {
     config: Arc<AppConfig>,
@@ -145,16 +144,16 @@ impl HakimiHub {
             ui.step_server();
         }
 
-        let proxy_server = ProxyServer::new(
-            config.proxy.clone(),
-            metrics.clone(),
-            handler_ctx,
-        );
+        let proxy_server = ProxyServer::new(config.proxy.clone(), metrics.clone(), handler_ctx);
         let shutdown_rx = self.shutdown_tx.subscribe();
 
         // 完成启动 UI
         if let Some(ref ui) = startup_ui {
-            ui.finish(&config.proxy.bind, config.proxy.port, config.proxy.mitm_enabled);
+            ui.finish(
+                &config.proxy.bind,
+                config.proxy.port,
+                config.proxy.mitm_enabled,
+            );
         }
 
         // 运行面板（只在启用 UI 时）
@@ -213,16 +212,14 @@ impl HakimiHub {
 
         proxy_handle.abort();
 
-        tokio::time::timeout(
-            Duration::from_secs(2),
-            probe_handle
-        ).await.ok();
+        tokio::time::timeout(Duration::from_secs(2), probe_handle)
+            .await
+            .ok();
 
         if let Some(handle) = panel_handle {
-            tokio::time::timeout(
-                Duration::from_secs(1),
-                handle
-            ).await.ok();
+            tokio::time::timeout(Duration::from_secs(1), handle)
+                .await
+                .ok();
         }
 
         self.stop(no_ui).await

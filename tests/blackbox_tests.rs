@@ -5,19 +5,19 @@
 //! - CLI 测试只通过命令行接口进行，不查看实现代码
 //! - 重点测试非 Happy Path 场景（错误处理、边界条件、异常输入）
 
+use std::io::Write;
 use std::net::IpAddr;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use std::process::Command;
-use std::io::Write;
-use std::path::PathBuf;
 
 // 只导入公共模块
-use hakimi_hub::utils::evictable_cache::EvictableCache;
-use hakimi_hub::dns::doh_client::{DohClient, DohResolveResult};
 use hakimi_hub::core::config::DohEndpoint;
+use hakimi_hub::dns::doh_client::{DohClient, DohResolveResult};
 use hakimi_hub::test_utils;
+use hakimi_hub::utils::evictable_cache::EvictableCache;
 
 use std::collections::HashMap;
 
@@ -33,7 +33,10 @@ mod boundary_tests {
     fn test_empty_cache_get_returns_none() {
         let cache: EvictableCache<String, i32> = EvictableCache::new(10, "test_cache");
 
-        assert!(cache.get(&"any_key".to_string()).is_none(), "空缓存 get 应该返回 None");
+        assert!(
+            cache.get(&"any_key".to_string()).is_none(),
+            "空缓存 get 应该返回 None"
+        );
     }
 
     /// 测试目的：验证空缓存的 remove 操作不会 panic
@@ -80,8 +83,12 @@ mod boundary_tests {
 
         // 验证 len() 与实际存在的 key 数量一致
         let mut actual_count = 0;
-        if has_key1 { actual_count += 1; }
-        if has_key2 { actual_count += 1; }
+        if has_key1 {
+            actual_count += 1;
+        }
+        if has_key2 {
+            actual_count += 1;
+        }
         assert_eq!(len, actual_count, "len() 应该与实际存在的 key 数量一致");
     }
 
@@ -123,7 +130,11 @@ mod boundary_tests {
         let cache: EvictableCache<String, i32> = EvictableCache::new(10, "test_cache");
 
         cache.insert("".to_string(), 42);
-        assert_eq!(cache.get(&"".to_string()), Some(42), "空字符串 key 应该可以正常使用");
+        assert_eq!(
+            cache.get(&"".to_string()),
+            Some(42),
+            "空字符串 key 应该可以正常使用"
+        );
         assert_eq!(cache.len(), 1);
     }
 
@@ -152,8 +163,12 @@ mod boundary_tests {
         assert_eq!(cache.len(), special_keys.len());
 
         for (i, key) in special_keys.iter().enumerate() {
-            assert_eq!(cache.get(&key.to_string()), Some(i as i32),
-                "特殊字符 key '{}' 应该可以正常读取", key);
+            assert_eq!(
+                cache.get(&key.to_string()),
+                Some(i as i32),
+                "特殊字符 key '{}' 应该可以正常读取",
+                key
+            );
         }
     }
 
@@ -215,7 +230,10 @@ mod boundary_tests {
         cache.insert("key".to_string(), 1);
 
         assert!(cache.contains_key(&"key".to_string()), "应该包含 key");
-        assert!(!cache.contains_key(&"other".to_string()), "不应该包含 other");
+        assert!(
+            !cache.contains_key(&"other".to_string()),
+            "不应该包含 other"
+        );
     }
 }
 
@@ -323,8 +341,11 @@ mod capacity_tests {
         assert_eq!(cache.len(), 1, "重复插入同一个 key 不应该增加长度");
 
         // 最后的值应该是最新的
-        assert_eq!(cache.get(&"same_key".to_string()), Some(99),
-            "同一个 key 的值应该被更新");
+        assert_eq!(
+            cache.get(&"same_key".to_string()),
+            Some(99),
+            "同一个 key 的值应该被更新"
+        );
     }
 
     /// 测试目的：验证 insert 后 remove 再 insert 的行为
@@ -384,7 +405,10 @@ mod ttl_tests {
         thread::sleep(Duration::from_millis(100));
 
         // 过期后应该返回 None
-        assert!(cache.get(&"ttl_key".to_string()).is_none(), "TTL 过期后应该返回 None");
+        assert!(
+            cache.get(&"ttl_key".to_string()).is_none(),
+            "TTL 过期后应该返回 None"
+        );
     }
 
     /// 测试目的：验证 TTL 未过期时元素可访问
@@ -399,7 +423,11 @@ mod ttl_tests {
         thread::sleep(Duration::from_millis(10));
 
         // 应该仍然可访问
-        assert_eq!(cache.get(&"ttl_key".to_string()), Some(42), "TTL 未过期应该可以访问");
+        assert_eq!(
+            cache.get(&"ttl_key".to_string()),
+            Some(42),
+            "TTL 未过期应该可以访问"
+        );
     }
 
     /// 测试目的：验证 TTL 为 0 的行为（立即过期）
@@ -686,8 +714,10 @@ mod error_input_tests {
 
         cache.insert("existing_key".to_string(), 1);
 
-        assert!(cache.get(&"nonexistent_key".to_string()).is_none(),
-            "get 不存在的 key 应该返回 None");
+        assert!(
+            cache.get(&"nonexistent_key".to_string()).is_none(),
+            "get 不存在的 key 应该返回 None"
+        );
     }
 
     /// 测试目的：验证 remove 不存在的 key 不会 panic
@@ -824,7 +854,11 @@ mod blind_box_tests {
                 existing_count += 1;
             }
         }
-        assert_eq!(existing_count, cache.len(), "实际存在的 key 数量应该等于 len()");
+        assert_eq!(
+            existing_count,
+            cache.len(),
+            "实际存在的 key 数量应该等于 len()"
+        );
     }
 
     /// 测试目的：验证频繁操作下的一致性
@@ -937,15 +971,7 @@ mod blind_box_tests {
         let cache: EvictableCache<String, i64> = EvictableCache::new(10, "test_cache");
 
         // 测试极值
-        let test_values = vec![
-            i64::MAX,
-            i64::MIN,
-            0,
-            -1,
-            1,
-            i64::MAX - 1,
-            i64::MIN + 1,
-        ];
+        let test_values = vec![i64::MAX, i64::MIN, 0, -1, 1, i64::MAX - 1, i64::MIN + 1];
 
         for (i, &value) in test_values.iter().enumerate() {
             cache.insert(format!("extreme_{}", i), value);
@@ -1048,7 +1074,9 @@ mod cli_blackbox_tests {
         // 应该显示帮助信息
         let output = stdout + &stderr;
         assert!(
-            output.contains("hakimi-hub") || output.contains("USAGE") || output.contains("Commands"),
+            output.contains("hakimi-hub")
+                || output.contains("USAGE")
+                || output.contains("Commands"),
             "帮助信息应该包含使用说明: {}",
             output
         );
@@ -1135,14 +1163,11 @@ mod cli_blackbox_tests {
         std::fs::write(&config_path, "").expect("应该能写入文件");
 
         // --config 是全局参数，需要放在子命令之前
-        let (success, stdout, stderr) = run_cli(&[
-            "--config", config_path.to_str().unwrap(),
-            "config", "init"
-        ]);
+        let (success, stdout, stderr) =
+            run_cli(&["--config", config_path.to_str().unwrap(), "config", "init"]);
 
         // 应该成功（覆盖现有配置）
-        assert!(success, "config init 应该成功: {} {}",
-            stdout, stderr);
+        assert!(success, "config init 应该成功: {} {}", stdout, stderr);
 
         let output = stdout + &stderr;
         let _ = output;
@@ -1167,10 +1192,8 @@ mod cli_blackbox_tests {
     /// 测试目的：验证配置文件路径不存在时的处理
     #[test]
     fn test_nonexistent_config_file() {
-        let (success, stdout, stderr) = run_cli(&[
-            "start",
-            "--config", "/nonexistent/path/config.toml"
-        ]);
+        let (success, stdout, stderr) =
+            run_cli(&["start", "--config", "/nonexistent/path/config.toml"]);
 
         // 应该失败或提示配置文件不存在
         // 只验证不会 panic
@@ -1249,10 +1272,8 @@ mod config_boundary_tests {
         let invalid_toml = "this is not valid toml = [";
         let file = create_temp_config(invalid_toml);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该失败
         assert!(!success, "无效 TOML 应该失败");
@@ -1271,10 +1292,8 @@ mod config_boundary_tests {
         let empty_toml = "";
         let file = create_temp_config(empty_toml);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该成功（使用默认值）或提示需要初始化
         // 只验证不会 panic
@@ -1288,10 +1307,8 @@ mod config_boundary_tests {
         let config_with_zero_port = "proxy_port = 0";
         let file = create_temp_config(config_with_zero_port);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "validate"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "validate"]);
 
         // 应该失败（端口 0 通常无效）
         if !success {
@@ -1310,10 +1327,8 @@ mod config_boundary_tests {
         let config_with_max_port = "proxy_port = 65535";
         let file = create_temp_config(config_with_max_port);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该成功（65535 是有效端口）
         // 只验证不会 panic
@@ -1327,16 +1342,17 @@ mod config_boundary_tests {
         let config_with_overflow_port = "proxy_port = 65536";
         let file = create_temp_config(config_with_overflow_port);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "validate"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "validate"]);
 
         // 应该失败（65536 超出端口范围）
         if !success {
             let output = stdout + &stderr;
             assert!(
-                output.contains("port") || output.contains("invalid") || output.contains("error") || output.contains("range"),
+                output.contains("port")
+                    || output.contains("invalid")
+                    || output.contains("error")
+                    || output.contains("range"),
                 "应该提示端口超出范围: {}",
                 output
             );
@@ -1349,10 +1365,8 @@ mod config_boundary_tests {
         let partial_config = "mitm_enabled = true";
         let file = create_temp_config(partial_config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该成功，缺失的配置使用默认值
         // 只验证不会 panic
@@ -1365,10 +1379,8 @@ mod config_boundary_tests {
     fn test_config_file_is_directory() {
         let temp_dir = tempfile::tempdir().expect("应该能创建临时目录");
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            temp_dir.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(temp_dir.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该失败（路径是目录不是文件）
         let output = stdout + &stderr;
@@ -1381,10 +1393,8 @@ mod config_boundary_tests {
         let config = "idle_timeout_secs = 0";
         let file = create_temp_config(config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "validate"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "validate"]);
 
         // 可能失败（超时为 0 可能无效）
         let output = stdout + &stderr;
@@ -1397,10 +1407,8 @@ mod config_boundary_tests {
         let config = "dns.cache_ttl_secs = 0";
         let file = create_temp_config(config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "validate"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "validate"]);
 
         let output = stdout + &stderr;
         let _ = (success, output);
@@ -1487,8 +1495,8 @@ mod cli_concurrency_tests {
 
 mod intercept_rule_boundary_tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     /// 创建临时配置文件
     fn create_temp_config(content: &str) -> NamedTempFile {
@@ -1527,10 +1535,8 @@ mod intercept_rule_boundary_tests {
         let config = "intercepts = []";
         let file = create_temp_config(config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该成功
         let output = stdout + &stderr;
@@ -1547,10 +1553,8 @@ intercepts = [
 "#;
         let file = create_temp_config(config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "validate"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "validate"]);
 
         // 可能失败（缺少 action 字段）
         let output = stdout + &stderr;
@@ -1567,10 +1571,8 @@ intercepts = [
 "#;
         let file = create_temp_config(config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "validate"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "validate"]);
 
         // 应该失败（无效的 action）
         if !success {
@@ -1593,10 +1595,8 @@ intercepts = [
 "#;
         let file = create_temp_config(config);
 
-        let (success, stdout, stderr) = run_cli_with_config(
-            file.path().to_str().unwrap(),
-            &["config", "show"]
-        );
+        let (success, stdout, stderr) =
+            run_cli_with_config(file.path().to_str().unwrap(), &["config", "show"]);
 
         // 应该成功（通配符模式应该被支持）
         let output = stdout + &stderr;
@@ -1713,7 +1713,11 @@ mod doh_client_tests {
             let result = client.resolve(domain).await;
             match result {
                 Ok(resolve_result) => {
-                    assert!(!resolve_result.ips.is_empty(), "{} 应该返回至少一个 IP", domain);
+                    assert!(
+                        !resolve_result.ips.is_empty(),
+                        "{} 应该返回至少一个 IP",
+                        domain
+                    );
                 }
                 Err(e) => {
                     println!("解析 {} 时网络错误（可接受）: {:?}", domain, e);
@@ -1805,14 +1809,8 @@ mod doh_client_tests {
             Ok(resolve_result) => {
                 // 验证返回的 IP 都是公网 IP（不应该有 0.0.0.0, 127.0.0.1 等）
                 for ip in &resolve_result.ips {
-                    assert!(
-                        !ip.is_unspecified(),
-                        "不应该返回 unspecified IP"
-                    );
-                    assert!(
-                        !ip.is_loopback(),
-                        "不应该返回 loopback IP"
-                    );
+                    assert!(!ip.is_unspecified(), "不应该返回 unspecified IP");
+                    assert!(!ip.is_loopback(), "不应该返回 loopback IP");
                 }
             }
             Err(e) => {
@@ -1838,15 +1836,13 @@ mod doh_client_tests {
     fn test_endpoint_with_preset_ip() {
         setup();
 
-        let endpoints = vec![
-            DohEndpoint {
-                name: "test-doh".to_string(),
-                url: "https://dns.test/dns-query".to_string(),
-                priority: 1,
-                trusted: true,
-                preset_ip: Some("8.8.8.8".to_string()),
-            },
-        ];
+        let endpoints = vec![DohEndpoint {
+            name: "test-doh".to_string(),
+            url: "https://dns.test/dns-query".to_string(),
+            priority: 1,
+            trusted: true,
+            preset_ip: Some("8.8.8.8".to_string()),
+        }];
         let dns_mapping: HashMap<String, String> = HashMap::new();
 
         let client = DohClient::new(endpoints, dns_mapping);
@@ -1869,10 +1865,7 @@ mod integration_tests {
             EvictableCache::with_ttl(1000, "dns_cache", Duration::from_secs(300));
 
         // 模拟缓存 DNS 结果
-        let ips: Vec<IpAddr> = vec![
-            "8.8.8.8".parse().unwrap(),
-            "8.8.4.4".parse().unwrap(),
-        ];
+        let ips: Vec<IpAddr> = vec!["8.8.8.8".parse().unwrap(), "8.8.4.4".parse().unwrap()];
 
         dns_cache.insert("google.com".to_string(), ips.clone());
 
@@ -1955,10 +1948,7 @@ mod integration_tests {
             EvictableCache::new(100, "dns_result_cache");
 
         // 模拟存储解析结果
-        let ips: Vec<IpAddr> = vec![
-            "1.1.1.1".parse().unwrap(),
-            "8.8.8.8".parse().unwrap(),
-        ];
+        let ips: Vec<IpAddr> = vec!["1.1.1.1".parse().unwrap(), "8.8.8.8".parse().unwrap()];
 
         cache.insert("example.com".to_string(), ips.clone());
 
@@ -1968,7 +1958,10 @@ mod integration_tests {
         assert_eq!(cached.unwrap().len(), 2);
 
         // 验证可以存储多个域名
-        cache.insert("google.com".to_string(), vec!["142.250.80.46".parse().unwrap()]);
+        cache.insert(
+            "google.com".to_string(),
+            vec!["142.250.80.46".parse().unwrap()],
+        );
         assert_eq!(cache.len(), 2);
     }
 }

@@ -2,13 +2,12 @@ use anyhow::Result;
 use tracing::info;
 
 use crate::cache::ResourceCache;
-use crate::cli::args::{AppArgs, Command, ConfigAction, CacheAction};
+use crate::cli::args::{AppArgs, CacheAction, Command, ConfigAction};
 use crate::core::config::AppConfig;
 use crate::core::hub::HakimiHub;
 use crate::utils;
 
 pub async fn run(args: AppArgs) -> Result<()> {
-
     let config = if let Some(path) = &args.config {
         AppConfig::load_from_file(path)?
     } else {
@@ -308,7 +307,10 @@ async fn handle_cache_command(action: CacheAction, config: &AppConfig) -> Result
             let stats = resource_cache.stats();
             eprintln!();
             eprintln!("  缓存目录: {}", stats.cache_dir.display());
-            eprintln!("  总缓存大小: {:.2} MB", stats.total_size as f64 / 1024.0 / 1024.0);
+            eprintln!(
+                "  总缓存大小: {:.2} MB",
+                stats.total_size as f64 / 1024.0 / 1024.0
+            );
             eprintln!("  文件数量: {} 个", stats.file_count);
 
             if let Some(oldest) = stats.oldest {

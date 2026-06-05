@@ -5,7 +5,7 @@ const REG_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Sett
 
 // 从 Windows 注册表读取当前代理设置（供读取使用）
 pub fn read_proxy_settings() -> Result<crate::system::proxy_guard::SystemProxySettings> {
-    use winreg::enums::{HKEY_CURRENT_USER};
+    use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);

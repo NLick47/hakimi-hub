@@ -67,7 +67,8 @@ impl MirrorHealthTracker {
         if health.response_time_count == 0 {
             health.avg_response_time_ms = response_time_ms;
         } else {
-            health.avg_response_time_ms = 0.3 * response_time_ms + 0.7 * health.avg_response_time_ms;
+            health.avg_response_time_ms =
+                0.3 * response_time_ms + 0.7 * health.avg_response_time_ms;
         }
         health.response_time_count += 1;
 
@@ -148,7 +149,9 @@ impl MirrorHealthTracker {
                     .get(**b)
                     .map(|h| h.avg_response_time_ms)
                     .unwrap_or(f64::MAX);
-                time_a.partial_cmp(&time_b).unwrap_or(std::cmp::Ordering::Equal)
+                time_a
+                    .partial_cmp(&time_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .cloned()
             .cloned()
@@ -195,4 +198,3 @@ pub struct MirrorStats {
     pub last_response_time_ms: Option<f64>,
     pub is_disabled: bool,
 }
-

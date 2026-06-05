@@ -37,7 +37,10 @@ impl ProxyServer {
         self.ctx.metrics.clone()
     }
 
-    pub async fn start(&self, mut shutdown: tokio::sync::broadcast::Receiver<()>) -> anyhow::Result<()> {
+    pub async fn start(
+        &self,
+        mut shutdown: tokio::sync::broadcast::Receiver<()>,
+    ) -> anyhow::Result<()> {
         let bind_addr = format!("{}:{}", self.ctx.config.bind, self.ctx.config.port);
         let listener = TcpListener::bind(&bind_addr).await?;
 

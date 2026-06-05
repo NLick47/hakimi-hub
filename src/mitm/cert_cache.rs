@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use tracing::debug;
 
-use crate::mitm::ca::{CertificateAuthority, CertKeyPair};
+use crate::mitm::ca::{CertKeyPair, CertificateAuthority};
 use crate::utils::evictable_cache::SimpleEvictableCache;
 
 // 域名证书缓存，内存 + 磁盘两级
@@ -72,7 +72,13 @@ impl CertCache {
     fn disk_path(&self, domain: &str) -> PathBuf {
         let safe_name: String = domain
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         self.disk_dir.join(format!("{}.pem", safe_name))
     }
@@ -88,19 +94,20 @@ impl CertCache {
         let content = std::fs::read_to_string(path)?;
 
         // 找证书部分
-        let cert_start = content
-            .find("-----BEGIN CERTIFICATE-----")
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "No certificate found"))?;
-        let cert_end = content
-            .find("-----END CERTIFICATE-----")
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "No certificate end found"))?
-            + "-----END CERTIFICATE-----".len();
+        let cert_start = content.find("-----BEGIN CERTIFICATE-----").ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "No certificate found")
+        })?;
+        let cert_end = content.find("-----END CERTIFICATE-----").ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "No certificate end found")
+        })? + "-----END CERTIFICATE-----".len();
 
         // 找私钥部分（PRIVATE KEY 和 RSA PRIVATE KEY 都支持）
         let key_start = content
             .find("-----BEGIN PRIVATE KEY-----")
             .or_else(|| content.find("-----BEGIN RSA PRIVATE KEY-----"))
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "No private key found"))?;
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "No private key found")
+            })?;
         let key_end = content[key_start..]
             .find("-----END PRIVATE KEY-----")
             .map(|e| key_start + e + "-----END PRIVATE KEY-----".len())
@@ -109,7 +116,9 @@ impl CertCache {
                     .find("-----END RSA PRIVATE KEY-----")
                     .map(|e| key_start + e + "-----END RSA PRIVATE KEY-----".len())
             })
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "No private key end found"))?;
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "No private key end found")
+            })?;
 
         Ok(Arc::new(CertKeyPair::new(
             content[cert_start..cert_end].to_string(),
@@ -118,4 +127,3 @@ impl CertCache {
         )))
     }
 }
-

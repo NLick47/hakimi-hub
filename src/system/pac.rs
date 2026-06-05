@@ -48,4 +48,3 @@ function FindProxyForURL(url, host) {{
 pub fn pac_url(proxy_port: u16) -> String {
     format!("http://127.0.0.1:{}/pac", proxy_port)
 }
-

@@ -67,7 +67,6 @@ impl DomainRules {
                 DomainPattern::exact("education.github.com"),
                 // GitHub desktop
                 DomainPattern::exact("desktop.githubusercontent.com"),
-
                 // Steam domains
                 DomainPattern::suffix("steampowered.com"),
                 DomainPattern::suffix("steamstatic.com"),
@@ -156,4 +155,3 @@ impl DomainPattern {
         }
     }
 }
-

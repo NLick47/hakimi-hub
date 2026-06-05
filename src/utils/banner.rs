@@ -1,10 +1,8 @@
 use rand::{seq::SliceRandom, Rng};
 
-
 fn supports_color() -> bool {
     anstream::AutoStream::choice(&std::io::stderr()) != anstream::ColorChoice::Never
 }
-
 
 const RESET: &str = "\x1b[0m";
 const DIM: &str = "\x1b[2m";
@@ -35,12 +33,11 @@ const NOON_GLOW: &str = "\x1b[38;5;154m";
 const NOON_SOFT: &str = "\x1b[38;5;194m";
 
 // 深夜系（代码喵）- 深蓝/青色系
-const NIGHT_PRIMARY: &str = "\x1b[38;5;39m";      // 深蓝
-const NIGHT_SECONDARY: &str = "\x1b[38;5;45m";    // 青色
-const NIGHT_ACCENT: &str = "\x1b[38;5;51m";       // 亮青
-const NIGHT_GLOW: &str = "\x1b[38;5;81m";         // 浅蓝
-const NIGHT_SOFT: &str = "\x1b[38;5;117m";        // 淡青
-
+const NIGHT_PRIMARY: &str = "\x1b[38;5;39m"; // 深蓝
+const NIGHT_SECONDARY: &str = "\x1b[38;5;45m"; // 青色
+const NIGHT_ACCENT: &str = "\x1b[38;5;51m"; // 亮青
+const NIGHT_GLOW: &str = "\x1b[38;5;81m"; // 浅蓝
+const NIGHT_SOFT: &str = "\x1b[38;5;117m"; // 淡青
 
 #[derive(Clone, Copy, PartialEq)]
 enum TimeTheme {
@@ -50,7 +47,11 @@ enum TimeTheme {
 }
 
 fn time_theme_now() -> TimeTheme {
-    let hour = chrono::Local::now().format("%H").to_string().parse::<u32>().unwrap_or(12);
+    let hour = chrono::Local::now()
+        .format("%H")
+        .to_string()
+        .parse::<u32>()
+        .unwrap_or(12);
     match hour {
         6..=11 => TimeTheme::Morning,
         12..=17 => TimeTheme::Noon,
@@ -123,7 +124,6 @@ impl ThemeColors {
     }
 }
 
-
 // 旋转指示器
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -141,7 +141,13 @@ fn get_logo_lines() -> Vec<&'static str> {
 
 // Logo 单字符颜色化
 fn colorize_logo_char(ch: char, idx: usize, theme: &ThemeColors) -> String {
-    let gradient = [theme.primary, theme.secondary, theme.accent, theme.glow, theme.soft];
+    let gradient = [
+        theme.primary,
+        theme.secondary,
+        theme.accent,
+        theme.glow,
+        theme.soft,
+    ];
     let color = gradient[idx % gradient.len()];
     format!("{}{}{}", color, ch, RESET)
 }
@@ -395,16 +401,8 @@ fn get_common_cats() -> Vec<CatShape> {
         ),
         // 小萌喵
         (
-            &[
-                "    ∩∩    ",
-                "   (・ω・)   ",
-                "   ⊂彡☆))д´) ",
-            ],
-            &[
-                "    ∩∩    ",
-                "   (・‿・)   ",
-                "   ⊂彡☆))д´) ",
-            ],
+            &["    ∩∩    ", "   (・ω・)   ", "   ⊂彡☆))д´) "],
+            &["    ∩∩    ", "   (・‿・)   ", "   ⊂彡☆))д´) "],
         ),
     ]
 }
@@ -439,11 +437,16 @@ fn get_cat_with_blink(theme: &ThemeColors) -> (Vec<String>, Vec<String>) {
     (base_vec, blink_vec)
 }
 
-
 // 动态分隔线（带动画帧）
 fn animated_divider_frame(theme: &ThemeColors, frame: usize) -> String {
     let width = 52;
-    let gradient = [theme.primary, theme.secondary, theme.accent, theme.glow, theme.soft];
+    let gradient = [
+        theme.primary,
+        theme.secondary,
+        theme.accent,
+        theme.glow,
+        theme.soft,
+    ];
     let chars = ["━", "╾", "─", "╼"];
 
     let mut line = String::new();
@@ -463,7 +466,6 @@ fn animated_divider_frame(theme: &ThemeColors, frame: usize) -> String {
 fn divider(theme: &ThemeColors) -> String {
     animated_divider_frame(theme, 0)
 }
-
 
 /// 打印启动 banner（带动画）
 pub fn print_banner() {
@@ -577,8 +579,13 @@ pub fn print_goodbye_with_theme(theme_name: &str) {
 
     eprintln!();
     eprintln!("  {}", div);
-    eprintln!("  {primary}{face}{reset} {dim}下次见喵~{reset}",
-              primary = theme.primary, dim = DIM, reset = RESET, face = face);
+    eprintln!(
+        "  {primary}{face}{reset} {dim}下次见喵~{reset}",
+        primary = theme.primary,
+        dim = DIM,
+        reset = RESET,
+        face = face
+    );
     eprintln!("  {}", div);
     eprintln!();
 }
@@ -593,8 +600,12 @@ pub fn print_status_with_theme(status: &str, theme_name: &str) {
         return;
     }
     let theme = ThemeColors::from_config(theme_name);
-    eprintln!("  {primary}>{reset} {status}",
-              primary = theme.primary, reset = RESET, status = status);
+    eprintln!(
+        "  {primary}>{reset} {status}",
+        primary = theme.primary,
+        reset = RESET,
+        status = status
+    );
 }
 
 pub fn print_success(msg: &str) {
@@ -602,8 +613,12 @@ pub fn print_success(msg: &str) {
         eprintln!("  [+] {}", msg);
         return;
     }
-    eprintln!("  {green}[+]{reset} {msg}",
-              green = GREEN, reset = RESET, msg = msg);
+    eprintln!(
+        "  {green}[+]{reset} {msg}",
+        green = GREEN,
+        reset = RESET,
+        msg = msg
+    );
 }
 
 pub fn print_warning(msg: &str) {
@@ -611,8 +626,12 @@ pub fn print_warning(msg: &str) {
         eprintln!("  [!] {}", msg);
         return;
     }
-    eprintln!("  {yellow}[!]{reset} {msg}",
-              yellow = YELLOW, reset = RESET, msg = msg);
+    eprintln!(
+        "  {yellow}[!]{reset} {msg}",
+        yellow = YELLOW,
+        reset = RESET,
+        msg = msg
+    );
 }
 
 pub fn print_error(msg: &str) {
@@ -620,10 +639,13 @@ pub fn print_error(msg: &str) {
         eprintln!("  [-] {}", msg);
         return;
     }
-    eprintln!("  {red}[-]{reset} {msg}",
-              red = RED, reset = RESET, msg = msg);
+    eprintln!(
+        "  {red}[-]{reset} {msg}",
+        red = RED,
+        reset = RESET,
+        msg = msg
+    );
 }
-
 
 pub fn print_info(msg: &str) {
     print_info_with_theme(msg, "pink");
@@ -635,6 +657,10 @@ pub fn print_info_with_theme(msg: &str, theme_name: &str) {
         return;
     }
     let theme = ThemeColors::from_config(theme_name);
-    eprintln!("  {primary}[*]{reset} {msg}",
-              primary = theme.primary, reset = RESET, msg = msg);
+    eprintln!(
+        "  {primary}[*]{reset} {msg}",
+        primary = theme.primary,
+        reset = RESET,
+        msg = msg
+    );
 }

@@ -41,11 +41,11 @@ const NOON_GLOW: &str = "\x1B[38;5;154m";
 const NOON_SOFT: &str = "\x1B[38;5;194m";
 
 // 深夜系（代码喵）- 深蓝/青色系
-const NIGHT_PRIMARY: &str = "\x1b[38;5;39m";      // 深蓝
-const NIGHT_SECONDARY: &str = "\x1b[38;5;45m";    // 青色
-const NIGHT_ACCENT: &str = "\x1b[38;5;51m";       // 亮青
-const NIGHT_GLOW: &str = "\x1b[38;5;81m";         // 浅蓝
-const NIGHT_SOFT: &str = "\x1b[38;5;117m";        // 淡青
+const NIGHT_PRIMARY: &str = "\x1b[38;5;39m"; // 深蓝
+const NIGHT_SECONDARY: &str = "\x1b[38;5;45m"; // 青色
+const NIGHT_ACCENT: &str = "\x1b[38;5;51m"; // 亮青
+const NIGHT_GLOW: &str = "\x1b[38;5;81m"; // 浅蓝
+const NIGHT_SOFT: &str = "\x1b[38;5;117m"; // 淡青
 
 // ─────────────────────────────────────────────────────────────
 // 主题系统
@@ -59,7 +59,11 @@ enum TimeTheme {
 }
 
 fn time_theme_now() -> TimeTheme {
-    let hour = chrono::Local::now().format("%H").to_string().parse::<u32>().unwrap_or(12);
+    let hour = chrono::Local::now()
+        .format("%H")
+        .to_string()
+        .parse::<u32>()
+        .unwrap_or(12);
     match hour {
         6..=11 => TimeTheme::Morning,
         12..=17 => TimeTheme::Noon,
@@ -153,28 +157,19 @@ fn dim(text: &str) -> String {
 // ─────────────────────────────────────────────────────────────
 
 mod kaomoji {
-    pub const CAT: &[&str] = &[
-        "(=^･ω･^=)", "(=^･ｪ･^=)", "(ΦωΦ)", "(^w^)",
-    ];
-    pub const WORKING: &[&str] = &[
-        "(･_･)", "(｡_｡)", "(・_・)", "(°_°)",
-    ];
-    pub const SUCCESS: &[&str] = &[
-        "(^_^)b", "(^_^)v", "(≧▽≦)", "ヽ(^_^ )",
-    ];
-    pub const SLEEPY: &[&str] = &[
-        "(-_-)zzZ", "(u_u)", "(－_－) zzZ",
-    ];
-    pub const LOVE: &[&str] = &[
-        "(♥_♥)", "(♡▽♡)", "(´,,•ω•,,)",
-    ];
+    pub const CAT: &[&str] = &["(=^･ω･^=)", "(=^･ｪ･^=)", "(ΦωΦ)", "(^w^)"];
+    pub const WORKING: &[&str] = &["(･_･)", "(｡_｡)", "(・_・)", "(°_°)"];
+    pub const SUCCESS: &[&str] = &["(^_^)b", "(^_^)v", "(≧▽≦)", "ヽ(^_^ )"];
+    pub const SLEEPY: &[&str] = &["(-_-)zzZ", "(u_u)", "(－_－) zzZ"];
+    pub const LOVE: &[&str] = &["(♥_♥)", "(♡▽♡)", "(´,,•ω•,,)"];
 }
 
 fn pick_random(items: &[&str]) -> &'static str {
     let idx = (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as usize)
-        .unwrap_or(0)) % items.len();
+        .unwrap_or(0))
+        % items.len();
     unsafe { std::mem::transmute(items[idx]) }
 }
 
@@ -192,7 +187,13 @@ mod box_drawing {
 
 // 渐变分隔线（带动画帧）
 fn gradient_divider(theme: &ThemeColors, width: usize, frame: usize) -> String {
-    let gradient = [theme.primary, theme.secondary, theme.accent, theme.glow, theme.soft];
+    let gradient = [
+        theme.primary,
+        theme.secondary,
+        theme.accent,
+        theme.glow,
+        theme.soft,
+    ];
     let chars = ["━", "╾", "─", "╼"];
 
     let mut line = String::new();
@@ -226,7 +227,7 @@ impl StartupUI {
         Self {
             theme: ThemeColors::from_config(theme_name),
             current_step: AtomicUsize::new(0),
-            total_steps: 4,  // DNS -> CA -> 代理 -> 服务
+            total_steps: 4, // DNS -> CA -> 代理 -> 服务
         }
     }
 
@@ -236,10 +237,13 @@ impl StartupUI {
 
         eprintln!();
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line);
-        eprintln!("  {}{}  {} 启动中... {}",
-            self.theme.primary, box_drawing::VERTICAL,
+        eprintln!(
+            "  {}{}  {} 启动中... {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
             bold("Hakimi Hub"),
-            pick_random(kaomoji::WORKING));
+            pick_random(kaomoji::WORKING)
+        );
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::LEFT_TEE, line);
     }
 
@@ -247,11 +251,14 @@ impl StartupUI {
         let step = self.current_step.fetch_add(1, Ordering::SeqCst) + 1;
         let progress = format!("[{}/{}]", step, self.total_steps);
 
-        eprintln!("  {}{} {} {} {}",
-            self.theme.primary, box_drawing::VERTICAL,
+        eprintln!(
+            "  {}{} {} {} {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
             dim(&progress),
             colorize(icon, self.theme.accent),
-            message);
+            message
+        );
 
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
@@ -261,7 +268,11 @@ impl StartupUI {
     }
 
     pub fn step_ca(&self, loaded: bool) {
-        let msg = if loaded { "加载 CA 证书" } else { "生成 CA 证书" };
+        let msg = if loaded {
+            "加载 CA 证书"
+        } else {
+            "生成 CA 证书"
+        };
         self.step("[OK]", msg);
     }
 
@@ -281,30 +292,52 @@ impl StartupUI {
 
         let face = pick_random(kaomoji::SUCCESS);
 
-        eprintln!("  {}{}  {} {} 启动成功! {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            bold("Hakimi Hub"), face, RESET);
+        eprintln!(
+            "  {}{}  {} {} 启动成功! {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            bold("Hakimi Hub"),
+            face,
+            RESET
+        );
 
-        eprintln!("  {}{}  代理地址: {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            colorize(&format!("http://{}:{}", bind, port), self.theme.accent));
+        eprintln!(
+            "  {}{}  代理地址: {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            colorize(&format!("http://{}:{}", bind, port), self.theme.accent)
+        );
 
         let mitm_status = if mitm {
             colorize("已启用", self.theme.accent)
         } else {
             dim("已禁用")
         };
-        eprintln!("  {}{}  MITM 拦截: {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            mitm_status);
+        eprintln!(
+            "  {}{}  MITM 拦截: {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            mitm_status
+        );
 
         if mitm {
-            eprintln!("  {}{}  PAC 地址: {}",
-                self.theme.primary, box_drawing::VERTICAL,
-                colorize(&format!("http://{}:{}/pac", bind, port), self.theme.secondary));
+            eprintln!(
+                "  {}{}  PAC 地址: {}",
+                self.theme.primary,
+                box_drawing::VERTICAL,
+                colorize(
+                    &format!("http://{}:{}/pac", bind, port),
+                    self.theme.secondary
+                )
+            );
         }
 
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
 
         // 停留 3 秒让用户看清启动信息
         std::thread::sleep(std::time::Duration::from_millis(3000));
@@ -312,8 +345,8 @@ impl StartupUI {
         // 计算启动过程的行数：
         // 启动步骤: 4 行（header + 4 steps）
         // 启动成功框: 顶部线 + 标题 + 地址 + MITM + PAC? + 底部线
-        let header_lines = 3;  // print_header 打印的行数
-        let step_lines = 4;    // 4 个步骤
+        let header_lines = 3; // print_header 打印的行数
+        let step_lines = 4; // 4 个步骤
         let success_lines = if mitm { 6 } else { 5 };
 
         // 总共需要清理的行数
@@ -321,7 +354,7 @@ impl StartupUI {
 
         // 渐隐清理（每行 80ms）
         for _ in 0..total_clear_lines {
-            eprint!("\x1B[A\x1B[K");  // 上移一行并清除
+            eprint!("\x1B[A\x1B[K"); // 上移一行并清除
             std::thread::sleep(std::time::Duration::from_millis(80));
         }
 
@@ -337,10 +370,13 @@ impl StartupUI {
         let line = box_drawing::HORIZONTAL.repeat(width);
 
         eprintln!("  {}{}{}", RED, box_drawing::LEFT_TEE, line);
-        eprintln!("  {}{}  {} 启动失败 {}",
-            RED, box_drawing::VERTICAL,
+        eprintln!(
+            "  {}{}  {} 启动失败 {}",
+            RED,
+            box_drawing::VERTICAL,
             bold("Hakimi Hub"),
-            pick_random(kaomoji::SLEEPY));
+            pick_random(kaomoji::SLEEPY)
+        );
         eprintln!("  {}{}  错误: {}", RED, box_drawing::VERTICAL, message);
         eprintln!("  {}{}{}", RED, box_drawing::BOTTOM_LEFT, line);
         eprintln!("{}", RESET);
@@ -371,23 +407,37 @@ impl CommandOutput {
 
         if running {
             let cat = pick_random(kaomoji::CAT);
-            eprintln!("  {}{}  {} 正在运行 {}",
-                self.theme.primary, box_drawing::VERTICAL,
+            eprintln!(
+                "  {}{}  {} 正在运行 {}",
+                self.theme.primary,
+                box_drawing::VERTICAL,
                 colorize("Hakimi Hub", self.theme.accent),
-                cat);
+                cat
+            );
             if let Some(p) = pid {
-                eprintln!("  {}{}  PID: {}",
-                    self.theme.primary, box_drawing::VERTICAL,
-                    colorize(&p.to_string(), self.theme.glow));
+                eprintln!(
+                    "  {}{}  PID: {}",
+                    self.theme.primary,
+                    box_drawing::VERTICAL,
+                    colorize(&p.to_string(), self.theme.glow)
+                );
             }
         } else {
-            eprintln!("  {}{}  {} 未运行 {}",
-                self.theme.primary, box_drawing::VERTICAL,
+            eprintln!(
+                "  {}{}  {} 未运行 {}",
+                self.theme.primary,
+                box_drawing::VERTICAL,
                 colorize("Hakimi Hub", self.theme.soft),
-                pick_random(kaomoji::SLEEPY));
+                pick_random(kaomoji::SLEEPY)
+            );
         }
 
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
         eprintln!("{}", RESET);
     }
 
@@ -399,17 +449,28 @@ impl CommandOutput {
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line);
 
         if let Some(p) = pid {
-            eprintln!("  {}{}  已向进程 {} 发送停止信号 {}",
-                self.theme.primary, box_drawing::VERTICAL,
+            eprintln!(
+                "  {}{}  已向进程 {} 发送停止信号 {}",
+                self.theme.primary,
+                box_drawing::VERTICAL,
                 colorize(&p.to_string(), self.theme.glow),
-                pick_random(kaomoji::CAT));
+                pick_random(kaomoji::CAT)
+            );
         } else {
-            eprintln!("  {}{}  未找到运行中的实例 {}",
-                self.theme.primary, box_drawing::VERTICAL,
-                pick_random(kaomoji::WORKING));
+            eprintln!(
+                "  {}{}  未找到运行中的实例 {}",
+                self.theme.primary,
+                box_drawing::VERTICAL,
+                pick_random(kaomoji::WORKING)
+            );
         }
 
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
         eprintln!("{}", RESET);
     }
 
@@ -419,15 +480,29 @@ impl CommandOutput {
 
         eprintln!();
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line);
-        eprintln!("  {}{}  CA 证书已导出 {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            pick_random(kaomoji::SUCCESS));
-        eprintln!("  {}{}  路径: {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            colorize(path, self.theme.accent));
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}  CA 证书已导出 {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            pick_random(kaomoji::SUCCESS)
+        );
+        eprintln!(
+            "  {}{}  路径: {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            colorize(path, self.theme.accent)
+        );
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
         eprintln!();
-        eprintln!("  {} 将此证书添加到系统信任链即可启用 MITM 拦截", colorize("提示:", YELLOW));
+        eprintln!(
+            "  {} 将此证书添加到系统信任链即可启用 MITM 拦截",
+            colorize("提示:", YELLOW)
+        );
         eprintln!("{}", RESET);
     }
 
@@ -437,12 +512,23 @@ impl CommandOutput {
 
         eprintln!();
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line);
-        eprintln!("  {}{}  Git 代理配置成功 {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            pick_random(kaomoji::LOVE));
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}  Git 代理配置成功 {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            pick_random(kaomoji::LOVE)
+        );
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
         eprintln!();
-        eprintln!("  {} git clone/push/pull 将通过 Hakimi Hub 加速", colorize("提示:", YELLOW));
+        eprintln!(
+            "  {} git clone/push/pull 将通过 Hakimi Hub 加速",
+            colorize("提示:", YELLOW)
+        );
         eprintln!("{}", RESET);
     }
 
@@ -452,10 +538,18 @@ impl CommandOutput {
 
         eprintln!();
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line);
-        eprintln!("  {}{}  Git 代理配置已恢复 {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            pick_random(kaomoji::CAT));
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}  Git 代理配置已恢复 {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            pick_random(kaomoji::CAT)
+        );
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
         eprintln!("{}", RESET);
     }
 
@@ -465,13 +559,24 @@ impl CommandOutput {
 
         eprintln!();
         eprintln!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line);
-        eprintln!("  {}{}  配置模板已生成 {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            pick_random(kaomoji::SUCCESS));
-        eprintln!("  {}{}  路径: {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            colorize(path, self.theme.accent));
-        eprintln!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line);
+        eprintln!(
+            "  {}{}  配置模板已生成 {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            pick_random(kaomoji::SUCCESS)
+        );
+        eprintln!(
+            "  {}{}  路径: {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            colorize(path, self.theme.accent)
+        );
+        eprintln!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        );
         eprintln!();
         eprintln!("  {} 编辑配置文件自定义行为", colorize("提示:", YELLOW));
         eprintln!("{}", RESET);
@@ -490,16 +595,23 @@ impl CommandOutput {
 
     pub fn warning(&self, message: &str) {
         eprintln!();
-        eprintln!("  {} {} {}", colorize("!", YELLOW), message, pick_random(kaomoji::WORKING));
+        eprintln!(
+            "  {} {} {}",
+            colorize("!", YELLOW),
+            message,
+            pick_random(kaomoji::WORKING)
+        );
         eprintln!("{}", RESET);
     }
 
     pub fn success(&self, message: &str) {
         eprintln!();
-        eprintln!("  {} {} {}",
+        eprintln!(
+            "  {} {} {}",
             colorize("*", GREEN),
             message,
-            pick_random(kaomoji::SUCCESS));
+            pick_random(kaomoji::SUCCESS)
+        );
         eprintln!("{}", RESET);
     }
 }
@@ -520,8 +632,14 @@ pub fn goodbye(theme_name: &str) {
     eprintln!("  {}│{}    [OK] 恢复系统代理", theme.primary, RESET);
     eprintln!("  {}│{}    [OK] 清理临时文件", theme.primary, RESET);
     eprintln!("  {}├{}{}", theme.primary, line, RESET);
-    eprintln!("  {}│{}  {} {} 已停止 {}",
-        theme.primary, RESET, bold("Hakimi Hub"), colorize("(u_u)", theme.accent), RESET);
+    eprintln!(
+        "  {}│{}  {} {} 已停止 {}",
+        theme.primary,
+        RESET,
+        bold("Hakimi Hub"),
+        colorize("(u_u)", theme.accent),
+        RESET
+    );
     eprintln!("  {}{}{}", theme.primary, box_drawing::BOTTOM_LEFT, line);
     eprintln!("{}", RESET);
 }
@@ -538,44 +656,19 @@ fn get_cat_frames_by_theme(theme: &ThemeColors) -> &[&str] {
     // 根据主题颜色匹配对应的猫造型
     if theme.primary == PINK_PRIMARY {
         // 粉粉喵
-        &[
-            "(=^･ω･^=)ノ",
-            "(=^･ω･^=) ",
-            "ヾ(=^･ω･^=)",
-            "(=^･ω･^=) ",
-        ]
+        &["(=^･ω･^=)ノ", "(=^･ω･^=) ", "ヾ(=^･ω･^=)", "(=^･ω･^=) "]
     } else if theme.primary == MORNING_PRIMARY {
         // 阳光喵
-        &[
-            "(≧ω≦)ノ",
-            "(≧ω≦) ",
-            "ヾ(≧ω≦)",
-            "(≧ω≦) ",
-        ]
+        &["(≧ω≦)ノ", "(≧ω≦) ", "ヾ(≧ω≦)", "(≧ω≦) "]
     } else if theme.primary == NOON_PRIMARY {
         // 可可喵
-        &[
-            "(˘ω˘)ノ",
-            "(˘ω˘) ",
-            "ヾ(˘ω˘)",
-            "(˘ω˘) ",
-        ]
+        &["(˘ω˘)ノ", "(˘ω˘) ", "ヾ(˘ω˘)", "(˘ω˘) "]
     } else if theme.primary == NIGHT_PRIMARY {
         // 代码喵
-        &[
-            "(◉ω◉)ノ",
-            "(◉ω◉) ",
-            "ヾ(◉ω◉)",
-            "(◉ω◉) ",
-        ]
+        &["(◉ω◉)ノ", "(◉ω◉) ", "ヾ(◉ω◉)", "(◉ω◉) "]
     } else {
         // 默认
-        &[
-            "(=^･ω･^=)ノ",
-            "(=^･ω･^=) ",
-            "ヾ(=^･ω･^=)",
-            "(=^･ω･^=) ",
-        ]
+        &["(=^･ω･^=)ノ", "(=^･ω･^=) ", "ヾ(=^･ω･^=)", "(=^･ω･^=) "]
     }
 }
 
@@ -624,9 +717,7 @@ impl RuntimePanel {
             *pos = (*pos + 1) % 30;
         }
 
-        let pos = self.cat_position.lock()
-            .map(|p| *p)
-            .unwrap_or(0);
+        let pos = self.cat_position.lock().map(|p| *p).unwrap_or(0);
 
         // 根据主题选择猫的造型
         let cat_frames = get_cat_frames_by_theme(&self.theme);
@@ -642,7 +733,13 @@ impl RuntimePanel {
             String::new()
         };
 
-        format!("{}{}{}{}", spaces, colorize(cat, self.theme.glow), trail_spaces, RESET)
+        format!(
+            "{}{}{}{}",
+            spaces,
+            colorize(cat, self.theme.glow),
+            trail_spaces,
+            RESET
+        )
     }
 
     fn format_bytes(bytes: u64) -> String {
@@ -695,7 +792,9 @@ impl RuntimePanel {
         }
 
         // 获取历史数据
-        let history = self.rate_history.lock()
+        let history = self
+            .rate_history
+            .lock()
             .map(|h| h.iter().copied().collect::<Vec<_>>())
             .unwrap_or_default();
 
@@ -710,11 +809,14 @@ impl RuntimePanel {
         // Unicode block 字符: ▁▂▃▄▅▆▇█
         let sparks = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
-        history.iter().map(|&v| {
-            let normalized = v as f32 / max_val as f32;
-            let idx = (normalized * 7.0).round() as usize;
-            format!("{}{}", self.theme.accent, sparks[idx.min(7)])
-        }).collect()
+        history
+            .iter()
+            .map(|&v| {
+                let normalized = v as f32 / max_val as f32;
+                let idx = (normalized * 7.0).round() as usize;
+                format!("{}{}", self.theme.accent, sparks[idx.min(7)])
+            })
+            .collect()
     }
 
     pub fn print_panel(&self) {
@@ -732,62 +834,104 @@ impl RuntimePanel {
         let mut lines: Vec<String> = Vec::with_capacity(self.panel_lines);
 
         // 1. 顶部线
-        lines.push(format!("  {}{}{}", self.theme.primary, box_drawing::TOP_LEFT, line));
+        lines.push(format!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::TOP_LEFT,
+            line
+        ));
 
         // 2. 标题（带动态行走的猫）
         let walking_cat = self.render_walking_cat();
-        lines.push(format!("  {}{}  {} {}{}",
-            self.theme.primary, box_drawing::VERTICAL,
-            bold("运行中"), colorize("Hakimi Hub", self.theme.accent),
-            walking_cat));
+        lines.push(format!(
+            "  {}{}  {} {}{}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            bold("运行中"),
+            colorize("Hakimi Hub", self.theme.accent),
+            walking_cat
+        ));
 
         // 3. 分隔线
-        lines.push(format!("  {}{}{}", self.theme.primary, box_drawing::LEFT_TEE, line));
+        lines.push(format!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::LEFT_TEE,
+            line
+        ));
 
         // 4. 速率
         let sent_rate = Self::format_rate(rate_sent);
         let recv_rate = Self::format_rate(rate_recv);
-        lines.push(format!("  {}{}  速率: ↑ {:>10}  ↓ {:>10}",
-            self.theme.primary, box_drawing::VERTICAL,
+        lines.push(format!(
+            "  {}{}  速率: ↑ {:>10}  ↓ {:>10}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
             colorize(&sent_rate, self.theme.accent),
-            colorize(&recv_rate, self.theme.secondary)));
+            colorize(&recv_rate, self.theme.secondary)
+        ));
 
         // 5. 趋势图（始终打印，保持行数固定）
         let sparkline = self.render_sparkline(rate_recv);
-        lines.push(format!("  {}{}        {}{}",
-            self.theme.primary, box_drawing::VERTICAL,
-            sparkline, RESET));
+        lines.push(format!(
+            "  {}{}        {}{}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            sparkline,
+            RESET
+        ));
 
         // 6. 累计流量
         let total_sent = Self::format_bytes(stats.bytes_sent);
         let total_recv = Self::format_bytes(stats.bytes_received);
-        lines.push(format!("  {}{}  流量: ↑ {:>10}  ↓ {:>10}",
-            self.theme.primary, box_drawing::VERTICAL,
+        lines.push(format!(
+            "  {}{}  流量: ↑ {:>10}  ↓ {:>10}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
             colorize(&total_sent, self.theme.accent),
-            colorize(&total_recv, self.theme.secondary)));
+            colorize(&total_recv, self.theme.secondary)
+        ));
 
         // 7. 分隔线
-        lines.push(format!("  {}{}{}", self.theme.primary, box_drawing::LEFT_TEE, line));
+        lines.push(format!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::LEFT_TEE,
+            line
+        ));
 
         // 8. 运行时间
         let uptime = Self::format_uptime(self.start_time.elapsed());
-        lines.push(format!("  {}{}  运行: {}",
-            self.theme.primary, box_drawing::VERTICAL,
-            colorize(&uptime, self.theme.glow)));
+        lines.push(format!(
+            "  {}{}  运行: {}",
+            self.theme.primary,
+            box_drawing::VERTICAL,
+            colorize(&uptime, self.theme.glow)
+        ));
 
         // 9. 底部线
-        lines.push(format!("  {}{}{}", self.theme.primary, box_drawing::BOTTOM_LEFT, line));
+        lines.push(format!(
+            "  {}{}{}",
+            self.theme.primary,
+            box_drawing::BOTTOM_LEFT,
+            line
+        ));
 
         // 10. 状态提示
-        let face = if rate_recv > 2_000_000 {  // > 2 MB/s
+        let face = if rate_recv > 2_000_000 {
+            // > 2 MB/s
             colorize("(o_o)", YELLOW)
-        } else if rate_recv > 500_000 {  // > 500 KB/s
+        } else if rate_recv > 500_000 {
+            // > 500 KB/s
             colorize("(^_^)", self.theme.accent)
         } else {
             colorize("(-_-)", DIM)
         };
-        lines.push(format!("   {}  版本 {} | Ctrl+C 停止",
-            face, colorize(env!("CARGO_PKG_VERSION"), self.theme.glow)));
+        lines.push(format!(
+            "   {}  版本 {} | Ctrl+C 停止",
+            face,
+            colorize(env!("CARGO_PKG_VERSION"), self.theme.glow)
+        ));
 
         // 确保行数与 panel_lines 一致
         assert_eq!(lines.len(), self.panel_lines, "Panel lines mismatch!");
@@ -796,7 +940,10 @@ impl RuntimePanel {
         use std::io::Write;
         let mut stderr = std::io::stderr().lock();
 
-        if self.initialized.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        if self
+            .initialized
+            .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
             // 后续刷新：上移并重绘
             write!(stderr, "\x1B[{}A", self.panel_lines).ok();
             for line_content in &lines {

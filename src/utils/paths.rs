@@ -49,4 +49,3 @@ pub fn ensure_all_dirs() -> std::io::Result<()> {
     }
     Ok(())
 }
-

@@ -1,5 +1,5 @@
-pub mod proxy_guard;
 pub mod pac;
+pub mod proxy_guard;
 
 #[cfg(windows)]
 pub mod windows;

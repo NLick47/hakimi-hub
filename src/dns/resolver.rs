@@ -34,10 +34,7 @@ pub struct DnsResolver {
 
 impl DnsResolver {
     pub fn new(config: &DnsConfig) -> anyhow::Result<Self> {
-        let doh_client = DohClient::new(
-            config.doh_endpoints.clone(),
-            config.dns_mapping.clone(),
-        );
+        let doh_client = DohClient::new(config.doh_endpoints.clone(), config.dns_mapping.clone());
 
         doh_client.preresolve_doh_hosts();
 
@@ -73,7 +70,9 @@ impl DnsResolver {
         if filtered_ips.len() != ips.len() {
             debug!(
                 "IP 过滤: {} -> {} 个 IP（过滤掉 {} 个无效/私有 IP）",
-                domain, filtered_ips.len(), ips.len() - filtered_ips.len()
+                domain,
+                filtered_ips.len(),
+                ips.len() - filtered_ips.len()
             );
         }
 
@@ -88,17 +87,28 @@ impl DnsResolver {
 
         if ranked.is_empty() {
             // 测速全挂，回退到原始 IP
-            warn!("DNS 解析: {} 所有 IP 不可达，尝试原始列表 (via {})", domain, doh_info);
+            warn!(
+                "DNS 解析: {} 所有 IP 不可达，尝试原始列表 (via {})",
+                domain, doh_info
+            );
             if !ips.is_empty() {
-                self.cache.insert(domain.to_string(), CacheValue { ips: ips.clone() });
+                self.cache
+                    .insert(domain.to_string(), CacheValue { ips: ips.clone() });
                 return Ok(ips[0]);
             }
             anyhow::bail!("DNS 解析: {} 无可用 IP", domain);
         }
 
         let best = ranked[0];
-        info!("DNS 解析: {} -> {} (via {} + 测速, {} 个 IP)", domain, best, doh_info, ranked.len());
-        self.cache.insert(domain.to_string(), CacheValue { ips: ranked });
+        info!(
+            "DNS 解析: {} -> {} (via {} + 测速, {} 个 IP)",
+            domain,
+            best,
+            doh_info,
+            ranked.len()
+        );
+        self.cache
+            .insert(domain.to_string(), CacheValue { ips: ranked });
         Ok(best)
     }
 
@@ -117,7 +127,12 @@ impl DnsResolver {
                     let ranked = self.ip_prober.select_ranked_ips(domain, filtered_ips).await;
                     // 测速失败回退原始列表
                     let cached = if ranked.is_empty() { ips } else { ranked };
-                    self.cache.insert(domain.to_string(), CacheValue { ips: cached.clone() });
+                    self.cache.insert(
+                        domain.to_string(),
+                        CacheValue {
+                            ips: cached.clone(),
+                        },
+                    );
                     return cached;
                 }
                 vec![]
@@ -141,7 +156,10 @@ impl DnsResolver {
         const MAX_DOMAINS: usize = 50;
         const MAX_CONCURRENT: usize = 4;
 
-        let mut entries: Vec<_> = self.cache.dashmap().iter()
+        let mut entries: Vec<_> = self
+            .cache
+            .dashmap()
+            .iter()
             .map(|e| (e.key().clone(), e.last_accessed))
             .collect();
         entries.sort_by_key(|(_, t)| *t);
@@ -159,16 +177,20 @@ impl DnsResolver {
                 match r {
                     Ok(DohResolveResult { ips, .. }) if !ips.is_empty() => {
                         let filtered_ips = filter_ips(&ips, IpFilterLevel::PublicOnly);
-                        let ranked = self.ip_prober.force_reprobe_ranked(&domain, filtered_ips).await;
+                        let ranked = self
+                            .ip_prober
+                            .force_reprobe_ranked(&domain, filtered_ips)
+                            .await;
                         if !ranked.is_empty() {
-                            self.cache.insert(domain.clone(), CacheValue { ips: ranked });
+                            self.cache
+                                .insert(domain.clone(), CacheValue { ips: ranked });
                             debug!("定时测速更新: {}", domain);
                         }
                     }
                     Ok(_) => debug!("定时测速: {} 返回空结果", domain),
                     Err(e) => warn!("定时测速 DoH 查询失败 {}: {}", domain, e),
                 }
-        });
+            });
         }
 
         while let Some(_) = tasks.next().await {}
@@ -193,12 +215,24 @@ impl DnsResolver {
         let ranked = self.ip_prober.select_ranked_ips(domain, filtered_ips).await;
         if ranked.is_empty() {
             warn!("国际 DoH: {} 所有 IP 不可达 (via {})", domain, doh_info);
-            self.cache.insert(domain.to_string(), CacheValue { ips: ips.clone() });
+            self.cache
+                .insert(domain.to_string(), CacheValue { ips: ips.clone() });
             return Ok(ips);
         }
 
-        info!("国际回退: {} -> {} (via {}, {} 个 IP)", domain, ranked[0], doh_info, ranked.len());
-        self.cache.insert(domain.to_string(), CacheValue { ips: ranked.clone() });
+        info!(
+            "国际回退: {} -> {} (via {}, {} 个 IP)",
+            domain,
+            ranked[0],
+            doh_info,
+            ranked.len()
+        );
+        self.cache.insert(
+            domain.to_string(),
+            CacheValue {
+                ips: ranked.clone(),
+            },
+        );
         Ok(ranked)
     }
 

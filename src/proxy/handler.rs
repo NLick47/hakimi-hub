@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{info, debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::cache::ResourceCache;
 use crate::core::config::InterceptAction;
@@ -73,9 +73,19 @@ impl HandlerContext {
 
 #[derive(Debug, Clone)]
 pub enum ProxyAction {
-    HttpForward { host: String, port: u16 },
-    HttpsTunnel { host: String, port: u16, use_doh: bool },
-    MitmIntercept { host: String, port: u16 },
+    HttpForward {
+        host: String,
+        port: u16,
+    },
+    HttpsTunnel {
+        host: String,
+        port: u16,
+        use_doh: bool,
+    },
+    MitmIntercept {
+        host: String,
+        port: u16,
+    },
 }
 
 // 1 小时超时，防止僵死连接
@@ -154,9 +164,9 @@ fn is_http_method(bytes: &[u8]) -> bool {
     }
     match bytes[0] {
         b'G' => bytes.starts_with(b"GET"),
-        b'P' => bytes.starts_with(b"POST")
-            || bytes.starts_with(b"PUT")
-            || bytes.starts_with(b"PATCH"),
+        b'P' => {
+            bytes.starts_with(b"POST") || bytes.starts_with(b"PUT") || bytes.starts_with(b"PATCH")
+        }
         b'D' => bytes.starts_with(b"DELETE"),
         b'H' => bytes.starts_with(b"HEAD"),
         b'O' => bytes.starts_with(b"OPTIONS"),
@@ -195,8 +205,7 @@ pub async fn handle_connect(mut client: TcpStream, ctx: &HandlerContext) -> anyh
 
             let domain_action = ctx.domain_rules.classify(&host);
 
-            if let Some(InterceptAction::Abort(_)) =
-                ctx.intercept_matcher.match_domain(&host, "/")
+            if let Some(InterceptAction::Abort(_)) = ctx.intercept_matcher.match_domain(&host, "/")
             {
                 info!("拦截: 屏蔽 {}", host);
                 client
@@ -206,42 +215,46 @@ pub async fn handle_connect(mut client: TcpStream, ctx: &HandlerContext) -> anyh
             }
 
             let action = match domain_action {
-                DomainAction::Proxy if ctx.mitm_enabled => {
-                    ProxyAction::MitmIntercept {
-                        host: host.clone(),
-                        port,
-                    }
-                }
-                DomainAction::Proxy => {
-                    ProxyAction::HttpsTunnel {
-                        host: host.clone(),
-                        port,
-                        use_doh: true,
-                    }
-                }
-                DomainAction::Direct => {
-                    ProxyAction::HttpsTunnel {
-                        host: host.clone(),
-                        port,
-                        use_doh: false,
-                    }
-                }
+                DomainAction::Proxy if ctx.mitm_enabled => ProxyAction::MitmIntercept {
+                    host: host.clone(),
+                    port,
+                },
+                DomainAction::Proxy => ProxyAction::HttpsTunnel {
+                    host: host.clone(),
+                    port,
+                    use_doh: true,
+                },
+                DomainAction::Direct => ProxyAction::HttpsTunnel {
+                    host: host.clone(),
+                    port,
+                    use_doh: false,
+                },
                 DomainAction::Block => {
                     info!("已屏蔽对 {}:{} 的 CONNECT 请求", host, port);
-                    client
-                        .write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n")
-                        .await?;
+                    client.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await?;
                     return Ok(());
                 }
             };
 
             match action {
-                ProxyAction::HttpsTunnel { host, port, use_doh } => {
+                ProxyAction::HttpsTunnel {
+                    host,
+                    port,
+                    use_doh,
+                } => {
                     client
                         .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
                         .await?;
 
-                    crate::proxy::tunnel::establish_tunnel(client, &host, port, &ctx.tls_origin, use_doh, &ctx.metrics).await?;
+                    crate::proxy::tunnel::establish_tunnel(
+                        client,
+                        &host,
+                        port,
+                        &ctx.tls_origin,
+                        use_doh,
+                        &ctx.metrics,
+                    )
+                    .await?;
                 }
                 ProxyAction::MitmIntercept { host, port } => {
                     client
@@ -290,7 +303,9 @@ async fn perform_mitm(
     let n = match tokio::time::timeout(
         std::time::Duration::from_secs(30),
         client_tls.read(&mut peek_buf),
-    ).await {
+    )
+    .await
+    {
         Ok(Ok(n)) if n > 0 => n,
         Ok(Ok(_)) => {
             info!("MITM: HTTP 请求读取到空数据 {}", host);
@@ -326,7 +341,10 @@ async fn perform_mitm(
             return Ok(());
         }
 
-        UpstreamDecision::ProxyMirror { mirror, rewritten_request } => {
+        UpstreamDecision::ProxyMirror {
+            mirror,
+            rewritten_request,
+        } => {
             info!("MITM: 镜像代理: {} -> {}", host, mirror);
 
             let connect_start = Instant::now();
@@ -349,14 +367,26 @@ async fn perform_mitm(
             ctx.mirror_health.record_success(&mirror, response_time);
 
             server_tls.write_all(&rewritten_request).await?;
-            info!("MITM: 已转发改写后的请求 {} 字节到 {}", rewritten_request.len(), mirror);
+            info!(
+                "MITM: 已转发改写后的请求 {} 字节到 {}",
+                rewritten_request.len(),
+                mirror
+            );
 
             let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
-            match tokio::time::timeout(timeout, copy_bidirectional(&mut client_tls, &mut server_tls)).await {
+            match tokio::time::timeout(
+                timeout,
+                copy_bidirectional(&mut client_tls, &mut server_tls),
+            )
+            .await
+            {
                 Ok(Ok((c2s, s2c))) => {
                     ctx.metrics.add_bytes_sent(c2s);
                     ctx.metrics.add_bytes_received(s2c);
-                    info!("MITM: 镜像隧道关闭 {}, 客户端->服务器 {} 字节, 服务器->客户端 {} 字节", host, c2s, s2c);
+                    info!(
+                        "MITM: 镜像隧道关闭 {}, 客户端->服务器 {} 字节, 服务器->客户端 {} 字节",
+                        host, c2s, s2c
+                    );
                 }
                 Ok(Err(e)) => {
                     if e.to_string().contains("close_notify") {
@@ -366,18 +396,27 @@ async fn perform_mitm(
                     }
                 }
                 Err(_) => {
-                    warn!("MITM: 镜像传输超时 {} ({}s)", host, BIDIRECTIONAL_TIMEOUT_SECS);
+                    warn!(
+                        "MITM: 镜像传输超时 {} ({}s)",
+                        host, BIDIRECTIONAL_TIMEOUT_SECS
+                    );
                 }
             }
         }
 
-        UpstreamDecision::SniSpoof { real_host, fake_sni } => {
+        UpstreamDecision::SniSpoof {
+            real_host,
+            fake_sni,
+        } => {
             info!("MITM: SNI 伪装 {} (SNI={})", real_host, fake_sni);
 
             // 构建完整 URL 用于缓存查找
             let url = format!("https://{}{}", real_host, path);
             let should_cache = ResourceCache::is_cacheable_url(&url);
-            debug!("MITM: SNI 伪装缓存检查 url={}, should_cache={}", url, should_cache);
+            debug!(
+                "MITM: SNI 伪装缓存检查 url={}, should_cache={}",
+                url, should_cache
+            );
 
             // 尝试从缓存获取（仅对静态资源）
             if should_cache {
@@ -393,10 +432,14 @@ async fn perform_mitm(
             // 检查是否是 GitHub releases expanded_assets 页面（需要注入脚本）
             // 只匹配 /releases/expanded_assets/ 页面，其他页面正常透传
             let request_str = String::from_utf8_lossy(&pending_request);
-            let is_assets_page = real_host == "github.com"
-                && request_str.contains("/releases/expanded_assets/");
+            let is_assets_page =
+                real_host == "github.com" && request_str.contains("/releases/expanded_assets/");
 
-            let mut server_tls = match ctx.tls_origin.connect_with_sni_spoof(&real_host, &fake_sni).await {
+            let mut server_tls = match ctx
+                .tls_origin
+                .connect_with_sni_spoof(&real_host, &fake_sni)
+                .await
+            {
                 Ok(stream) => stream,
                 Err(e) => {
                     warn!("MITM: SNI 伪装连接失败 {}: {}", real_host, e);
@@ -414,7 +457,11 @@ async fn perform_mitm(
 
             if !pending_request.is_empty() {
                 server_tls.write_all(&pending_request).await?;
-                info!("MITM: 已转发客户端请求 {} 字节到 {}", pending_request.len(), real_host);
+                info!(
+                    "MITM: 已转发客户端请求 {} 字节到 {}",
+                    pending_request.len(),
+                    real_host
+                );
             }
 
             // 如果是 GitHub releases/assets 页面，需要拦截响应并注入脚本
@@ -463,7 +510,8 @@ async fn perform_mitm(
 
                 // 检查是否是 gzip 压缩（不能直接注入）
                 let is_gzip = response_str.to_lowercase().contains("content-encoding:")
-                    && (response_str.to_lowercase().contains("gzip") || response_str.to_lowercase().contains("deflate"));
+                    && (response_str.to_lowercase().contains("gzip")
+                        || response_str.to_lowercase().contains("deflate"));
 
                 if is_html && !is_gzip {
                     info!("MITM: 检测到 HTML 响应，读取完整内容并注入脚本");
@@ -473,7 +521,12 @@ async fn perform_mitm(
                     let is_chunked = response_str.to_lowercase().contains("transfer-encoding:")
                         && response_str.to_lowercase().contains("chunked");
 
-                    debug!("MITM: Content-Length={:?}, chunked={}, header_buf={}", content_length, is_chunked, header_buf.len());
+                    debug!(
+                        "MITM: Content-Length={:?}, chunked={}, header_buf={}",
+                        content_length,
+                        is_chunked,
+                        header_buf.len()
+                    );
 
                     // 读取剩余响应体
                     let mut body_buf = body_already_read;
@@ -488,7 +541,8 @@ async fn perform_mitm(
 
                         let mut read_total = 0u64;
                         while read_total < remaining {
-                            let to_read = std::cmp::min(tmp.len(), (remaining - read_total) as usize);
+                            let to_read =
+                                std::cmp::min(tmp.len(), (remaining - read_total) as usize);
                             match server_tls.read(&mut tmp[..to_read]).await {
                                 Ok(0) => break,
                                 Ok(n) => {
@@ -502,12 +556,16 @@ async fn perform_mitm(
                         // chunked 编码，读取到 0\r\n\r\n 结束标记
                         let read_timeout = Duration::from_secs(5);
                         loop {
-                            match tokio::time::timeout(read_timeout, server_tls.read(&mut tmp)).await {
+                            match tokio::time::timeout(read_timeout, server_tls.read(&mut tmp))
+                                .await
+                            {
                                 Ok(Ok(0)) => break,
                                 Ok(Ok(n)) => {
                                     body_buf.extend_from_slice(&tmp[..n]);
                                     // 检查是否读到 chunked 结束标记 0\r\n\r\n
-                                    if body_buf.ends_with(b"0\r\n\r\n") || body_buf.windows(5).any(|w| w == b"0\r\n\r\n") {
+                                    if body_buf.ends_with(b"0\r\n\r\n")
+                                        || body_buf.windows(5).any(|w| w == b"0\r\n\r\n")
+                                    {
                                         debug!("MITM: 检测到 chunked 结束标记");
                                         break;
                                     }
@@ -527,7 +585,9 @@ async fn perform_mitm(
                         // 设置短超时避免无限等待
                         let read_timeout = Duration::from_secs(3);
                         loop {
-                            match tokio::time::timeout(read_timeout, server_tls.read(&mut tmp)).await {
+                            match tokio::time::timeout(read_timeout, server_tls.read(&mut tmp))
+                                .await
+                            {
                                 Ok(Ok(0)) => break,
                                 Ok(Ok(n)) => body_buf.extend_from_slice(&tmp[..n]),
                                 Ok(Err(_)) => break,
@@ -565,11 +625,20 @@ async fn perform_mitm(
                     client_tls.write_all(&header_buf).await?;
                     if !body_already_read.is_empty() {
                         client_tls.write_all(&body_already_read).await?;
-                        debug!("MITM: 已转发已读取的响应体 {} 字节", body_already_read.len());
+                        debug!(
+                            "MITM: 已转发已读取的响应体 {} 字节",
+                            body_already_read.len()
+                        );
                     }
 
                     // 继续双向透传剩余数据
-                    match copy_bidirectional_with_metrics(&mut client_tls, &mut server_tls, &ctx.metrics).await {
+                    match copy_bidirectional_with_metrics(
+                        &mut client_tls,
+                        &mut server_tls,
+                        &ctx.metrics,
+                    )
+                    .await
+                    {
                         Ok((c2s, s2c)) => {
                             info!("MITM: SNI 伪装隧道关闭 {}, 客户端->服务器 {} 字节, 服务器->客户端 {} 字节", real_host, c2s, s2c);
                         }
@@ -589,28 +658,27 @@ async fn perform_mitm(
 
                     // 读取响应头（直到 \r\n\r\n），带超时
                     let header_read_timeout = Duration::from_secs(30);
-                    let header_end = match tokio::time::timeout(
-                        header_read_timeout,
-                        async {
-                            loop {
-                                let n = match server_tls.read(&mut tmp).await {
-                                    Ok(0) => return Ok(None),
-                                    Ok(n) => n,
-                                    Err(e) => return Err(e),
-                                };
+                    let header_end = match tokio::time::timeout(header_read_timeout, async {
+                        loop {
+                            let n = match server_tls.read(&mut tmp).await {
+                                Ok(0) => return Ok(None),
+                                Ok(n) => n,
+                                Err(e) => return Err(e),
+                            };
 
-                                response_buf.extend_from_slice(&tmp[..n]);
+                            response_buf.extend_from_slice(&tmp[..n]);
 
-                                if let Some(pos) = find_header_end(&response_buf) {
-                                    return Ok(Some(pos));
-                                }
+                            if let Some(pos) = find_header_end(&response_buf) {
+                                return Ok(Some(pos));
+                            }
 
-                                if response_buf.len() > 65536 {
-                                    return Ok(None);
-                                }
+                            if response_buf.len() > 65536 {
+                                return Ok(None);
                             }
                         }
-                    ).await {
+                    })
+                    .await
+                    {
                         Ok(Ok(Some(pos))) => Some(pos),
                         Ok(Ok(None)) | Ok(Err(_)) | Err(_) => {
                             warn!("MITM: SNI 伪装响应头读取失败/超时，放弃缓存直接透传");
@@ -621,8 +689,9 @@ async fn perform_mitm(
                             let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
                             let _ = tokio::time::timeout(
                                 timeout,
-                                copy_bidirectional(&mut client_tls, &mut server_tls)
-                            ).await;
+                                copy_bidirectional(&mut client_tls, &mut server_tls),
+                            )
+                            .await;
                             return Ok(());
                         }
                     };
@@ -636,9 +705,10 @@ async fn perform_mitm(
 
                     // 判断是否可缓存（必须有 Content-Length 才能缓存，否则无法确定响应体结束）
                     let can_cache = content_length.is_some()
-                        && content_type.as_ref().map(|ct| {
-                            ResourceCache::is_cacheable(&url, ct, content_length)
-                        }).unwrap_or(false);
+                        && content_type
+                            .as_ref()
+                            .map(|ct| ResourceCache::is_cacheable(&url, ct, content_length))
+                            .unwrap_or(false);
                     debug!("MITM: SNI 伪装缓存判断 url={}, content_type={:?}, content_length={:?}, can_cache={}", url, content_type, content_length, can_cache);
 
                     if can_cache {
@@ -677,30 +747,46 @@ async fn perform_mitm(
                                 if let Err(e) = ctx.resource_cache.put(&url, &cached).await {
                                     warn!("MITM: SNI 伪装缓存存储失败: {}", e);
                                 } else {
-                                    info!("MITM: SNI 伪装已缓存 {} ({} bytes)", url, cached.data.len());
+                                    info!(
+                                        "MITM: SNI 伪装已缓存 {} ({} bytes)",
+                                        url,
+                                        cached.data.len()
+                                    );
                                 }
                             }
                         } else {
-                            debug!("MITM: SNI 伪装响应体不完整 (期望 {} 字节，实际 {} 字节)，放弃缓存", total_body, body.len());
+                            debug!(
+                                "MITM: SNI 伪装响应体不完整 (期望 {} 字节，实际 {} 字节)，放弃缓存",
+                                total_body,
+                                body.len()
+                            );
                         }
 
                         // 继续透传连接剩余数据（keep-alive 可能有后续请求）
                         let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
                         let _ = tokio::time::timeout(
                             timeout,
-                            copy_bidirectional(&mut client_tls, &mut server_tls)
-                        ).await;
+                            copy_bidirectional(&mut client_tls, &mut server_tls),
+                        )
+                        .await;
                     } else {
                         // 不可缓存或无 Content-Length，继续透传
                         let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
                         let _ = tokio::time::timeout(
                             timeout,
-                            copy_bidirectional(&mut client_tls, &mut server_tls)
-                        ).await;
+                            copy_bidirectional(&mut client_tls, &mut server_tls),
+                        )
+                        .await;
                     }
                 } else {
                     // 不需要缓存，直接透传
-                    match copy_bidirectional_with_metrics(&mut client_tls, &mut server_tls, &ctx.metrics).await {
+                    match copy_bidirectional_with_metrics(
+                        &mut client_tls,
+                        &mut server_tls,
+                        &ctx.metrics,
+                    )
+                    .await
+                    {
                         Ok((c2s, s2c)) => {
                             info!("MITM: SNI 伪装隧道关闭 {}, 客户端->服务器 {} 字节, 服务器->客户端 {} 字节", real_host, c2s, s2c);
                         }
@@ -745,7 +831,11 @@ async fn perform_mitm(
 
             if !pending_request.is_empty() {
                 server_tls.write_all(&pending_request).await?;
-                info!("MITM: 已转发客户端请求 {} 字节到 {}", pending_request.len(), host);
+                info!(
+                    "MITM: 已转发客户端请求 {} 字节到 {}",
+                    pending_request.len(),
+                    host
+                );
             }
 
             // 尝试缓存响应
@@ -791,9 +881,10 @@ async fn perform_mitm(
 
                 // 判断是否可缓存（必须有 Content-Length）
                 let can_cache = content_length.is_some()
-                    && content_type.as_ref().map(|ct| {
-                        ResourceCache::is_cacheable(&url, ct, content_length)
-                    }).unwrap_or(false);
+                    && content_type
+                        .as_ref()
+                        .map(|ct| ResourceCache::is_cacheable(&url, ct, content_length))
+                        .unwrap_or(false);
 
                 if can_cache {
                     // 有 Content-Length，精确读取指定字节数
@@ -840,24 +931,34 @@ async fn perform_mitm(
                     let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
                     let _ = tokio::time::timeout(
                         timeout,
-                        copy_bidirectional(&mut client_tls, &mut server_tls)
-                    ).await;
+                        copy_bidirectional(&mut client_tls, &mut server_tls),
+                    )
+                    .await;
                 } else {
                     // 不可缓存，继续透传
                     let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
                     let _ = tokio::time::timeout(
                         timeout,
-                        copy_bidirectional(&mut client_tls, &mut server_tls)
-                    ).await;
+                        copy_bidirectional(&mut client_tls, &mut server_tls),
+                    )
+                    .await;
                 }
             } else {
                 // 不需要缓存，直接透传
                 let timeout = Duration::from_secs(BIDIRECTIONAL_TIMEOUT_SECS);
-                match tokio::time::timeout(timeout, copy_bidirectional(&mut client_tls, &mut server_tls)).await {
+                match tokio::time::timeout(
+                    timeout,
+                    copy_bidirectional(&mut client_tls, &mut server_tls),
+                )
+                .await
+                {
                     Ok(Ok((c2s, s2c))) => {
                         ctx.metrics.add_bytes_sent(c2s);
                         ctx.metrics.add_bytes_received(s2c);
-                        info!("MITM: 隧道关闭 {}, 客户端->服务器 {} 字节, 服务器->客户端 {} 字节", host, c2s, s2c);
+                        info!(
+                            "MITM: 隧道关闭 {}, 客户端->服务器 {} 字节, 服务器->客户端 {} 字节",
+                            host, c2s, s2c
+                        );
                     }
                     Ok(Err(e)) => {
                         if e.to_string().contains("close_notify") {
@@ -882,14 +983,27 @@ async fn perform_mitm(
 }
 
 enum UpstreamDecision {
-    Redirect { response: Vec<u8> },
-    ProxyMirror { mirror: String, rewritten_request: Vec<u8> },
-    SniSpoof { real_host: String, fake_sni: String },
+    Redirect {
+        response: Vec<u8>,
+    },
+    ProxyMirror {
+        mirror: String,
+        rewritten_request: Vec<u8>,
+    },
+    SniSpoof {
+        real_host: String,
+        fake_sni: String,
+    },
     Direct,
     Abort,
 }
 
-fn resolve_upstream(host: &str, path: &str, ctx: &HandlerContext, pending_request: &[u8]) -> UpstreamDecision {
+fn resolve_upstream(
+    host: &str,
+    path: &str,
+    ctx: &HandlerContext,
+    pending_request: &[u8],
+) -> UpstreamDecision {
     let resolve_real_host = |rule_host: &str, actual_host: &str| -> String {
         if rule_host.contains('*') {
             actual_host.to_string()
@@ -912,7 +1026,10 @@ fn resolve_upstream(host: &str, path: &str, ctx: &HandlerContext, pending_reques
 
         Some(InterceptAction::Proxy { mirror }) => {
             let rewritten = rewrite_request_for_mirror(pending_request, mirror, host);
-            UpstreamDecision::ProxyMirror { mirror: mirror.clone(), rewritten_request: rewritten }
+            UpstreamDecision::ProxyMirror {
+                mirror: mirror.clone(),
+                rewritten_request: rewritten,
+            }
         }
 
         Some(InterceptAction::Redirect { target }) => {
@@ -921,13 +1038,9 @@ fn resolve_upstream(host: &str, path: &str, ctx: &HandlerContext, pending_reques
             UpstreamDecision::Redirect { response }
         }
 
-        Some(InterceptAction::Abort(_)) => {
-            UpstreamDecision::Abort
-        }
+        Some(InterceptAction::Abort(_)) => UpstreamDecision::Abort,
 
-        None => {
-            UpstreamDecision::Direct
-        }
+        None => UpstreamDecision::Direct,
     }
 }
 
@@ -948,7 +1061,9 @@ async fn handle_http(mut client: TcpStream, ctx: &HandlerContext) -> anyhow::Res
 
         if request_buf.len() > 65536 {
             warn!("HTTP 请求头超过 64KB 限制");
-            client.write_all(b"HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n").await?;
+            client
+                .write_all(b"HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n")
+                .await?;
             return Ok(());
         }
     }
@@ -978,18 +1093,14 @@ async fn handle_http(mut client: TcpStream, ctx: &HandlerContext) -> anyhow::Res
 
             match action {
                 DomainAction::Block => {
-                    client
-                        .write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n")
-                        .await?;
+                    client.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await?;
                 }
-                _ => {
-                    match forward_http(client, &request_str, &host, port, ctx).await {
-                        Ok(()) => {}
-                        Err(e) => {
-                            warn!("HTTP 转发失败 {}:{}: {}", host, port, e);
-                        }
+                _ => match forward_http(client, &request_str, &host, port, ctx).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        warn!("HTTP 转发失败 {}:{}: {}", host, port, e);
                     }
-                }
+                },
             }
         }
         None => {
@@ -1001,7 +1112,6 @@ async fn handle_http(mut client: TcpStream, ctx: &HandlerContext) -> anyhow::Res
 
     Ok(())
 }
-
 
 /// GitHub HTML 页面注入脚本，将下载链接重定向到镜像站
 fn inject_mirror_script(html: &str) -> String {
@@ -1046,7 +1156,6 @@ try {
     }
 }
 
-
 fn is_pac_request(first_line: &str) -> bool {
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     if parts.len() < 2 {
@@ -1086,7 +1195,11 @@ async fn forward_http(
             ctx.metrics.add_bytes_received(s2c);
         }
         Ok(Err(e)) => return Err(e.into()),
-        Err(_) => anyhow::bail!("HTTP 转发传输超时 {} ({}s)", host, BIDIRECTIONAL_TIMEOUT_SECS),
+        Err(_) => anyhow::bail!(
+            "HTTP 转发传输超时 {} ({}s)",
+            host,
+            BIDIRECTIONAL_TIMEOUT_SECS
+        ),
     }
 
     Ok(())
@@ -1155,9 +1268,14 @@ fn parse_request_path(line: &str) -> Option<String> {
 }
 
 // 镜像站请求改写：/path → /https://original_host/path
-fn rewrite_request_for_mirror(original_data: &[u8], mirror_host: &str, original_host: &str) -> Vec<u8> {
+fn rewrite_request_for_mirror(
+    original_data: &[u8],
+    mirror_host: &str,
+    original_host: &str,
+) -> Vec<u8> {
     let sep = b"\r\n\r\n";
-    let header_end = original_data.windows(4)
+    let header_end = original_data
+        .windows(4)
         .position(|w| w == sep)
         .unwrap_or(original_data.len());
     let body = if header_end + 4 < original_data.len() {
@@ -1167,7 +1285,9 @@ fn rewrite_request_for_mirror(original_data: &[u8], mirror_host: &str, original_
     };
 
     let header_str = String::from_utf8_lossy(&original_data[..header_end]);
-    let mut result = String::with_capacity(header_str.len() + mirror_host.len() + original_host.len() + body.len() + 128);
+    let mut result = String::with_capacity(
+        header_str.len() + mirror_host.len() + original_host.len() + body.len() + 128,
+    );
 
     for (i, line) in header_str.lines().enumerate() {
         if i == 0 {
@@ -1186,10 +1306,7 @@ fn rewrite_request_for_mirror(original_data: &[u8], mirror_host: &str, original_
                     ));
                 } else if path.starts_with("http://") || path.starts_with("https://") {
                     // 已经是完整 URL，转换为镜像站格式: /https://...
-                    result.push_str(&format!(
-                        "{} /{} {}\r\n",
-                        method, path, version
-                    ));
+                    result.push_str(&format!("{} /{} {}\r\n", method, path, version));
                 } else {
                     // 非标准路径（如 * 或 CONNECT 目标），保持原样
                     result.push_str(line);
@@ -1352,7 +1469,8 @@ fn parse_response_headers(response: &[u8]) -> (Option<String>, Option<u64>) {
     let mut content_type = None;
     let mut content_length = None;
 
-    for line in header_str.lines().skip(1) {  // 跳过状态行
+    for line in header_str.lines().skip(1) {
+        // 跳过状态行
         let line_lower = line.to_lowercase();
 
         if line_lower.starts_with("content-type:") {
@@ -1364,4 +1482,3 @@ fn parse_response_headers(response: &[u8]) -> (Option<String>, Option<u64>) {
 
     (content_type, content_length)
 }
-

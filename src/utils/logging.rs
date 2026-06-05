@@ -9,10 +9,15 @@ impl tracing_subscriber::fmt::time::FormatTime for LocalTimeHMS {
     fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
         use time::OffsetDateTime;
         let now = OffsetDateTime::now_local().map_err(|_| std::fmt::Error)?;
-        write!(w, "{:02}:{:02}:{:02}", now.hour(), now.minute(), now.second())
+        write!(
+            w,
+            "{:02}:{:02}:{:02}",
+            now.hour(),
+            now.minute(),
+            now.second()
+        )
     }
 }
-
 
 pub fn init(level: &str, retention_days: usize, enable_console: bool) -> anyhow::Result<()> {
     paths::ensure_all_dirs()?;

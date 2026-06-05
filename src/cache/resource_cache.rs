@@ -10,7 +10,6 @@ use tracing::{debug, info, warn};
 
 use crate::core::config::CacheConfig;
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheMetadata {
     /// 原始 URL
@@ -93,10 +92,11 @@ fn has_image_extension(url: &str) -> bool {
         &url_lower
     };
 
-    let image_extensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".avif"];
+    let image_extensions = [
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".avif",
+    ];
     image_extensions.iter().any(|ext| path.ends_with(ext))
 }
-
 
 pub struct ResourceCache {
     /// 缓存目录
@@ -274,14 +274,17 @@ impl ResourceCache {
 
         self.metadata.insert(key.clone(), metadata);
 
-        self.metadata_dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.metadata_dirty
+            .store(true, std::sync::atomic::Ordering::Relaxed);
 
         let metadata = Arc::clone(&self.metadata);
         let cache_dir = self.cache_dir.clone();
         let config = self.config.clone();
         let metadata_path = self.metadata_path.clone();
         tokio::spawn(async move {
-            if let Err(e) = Self::evict_if_needed_static(metadata, cache_dir, config, metadata_path).await {
+            if let Err(e) =
+                Self::evict_if_needed_static(metadata, cache_dir, config, metadata_path).await
+            {
                 warn!("缓存淘汰失败: {}", e);
             }
         });
@@ -385,9 +388,13 @@ impl ResourceCache {
     }
 
     pub async fn flush(&self) -> anyhow::Result<()> {
-        if self.metadata_dirty.load(std::sync::atomic::Ordering::Relaxed) {
+        if self
+            .metadata_dirty
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             self.save_metadata_async().await?;
-            self.metadata_dirty.store(false, std::sync::atomic::Ordering::Relaxed);
+            self.metadata_dirty
+                .store(false, std::sync::atomic::Ordering::Relaxed);
         }
         Ok(())
     }
