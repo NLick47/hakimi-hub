@@ -50,8 +50,7 @@ impl SimplePattern {
         }
 
         // Strip trailing wildcard
-        if p.ends_with(".*") {
-            let prefix = &p[..p.len() - 2];
+        if let Some(prefix) = p.strip_suffix(".*") {
             if prefix.is_empty() {
                 SimplePattern::MatchAll
             } else if anchored {
@@ -222,7 +221,7 @@ impl InterceptMatcher {
             } else {
                 exact_rules
                     .entry(rule.from)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(ExactRule {
                         path_pattern,
                         action: rule.action,
@@ -255,18 +254,18 @@ impl InterceptMatcher {
         }
 
         for rule in &self.suffix_rules {
-            if *domain_lower == rule.suffix || domain_lower.ends_with(&rule.dot_suffix) {
-                if Self::path_matches(&rule.path_pattern, path) {
-                    return Some(&rule.action);
-                }
+            if (*domain_lower == rule.suffix || domain_lower.ends_with(&rule.dot_suffix))
+                && Self::path_matches(&rule.path_pattern, path)
+            {
+                return Some(&rule.action);
             }
         }
 
         for rule in &self.wildcard_rules {
-            if self.wildcard_matches(rule, &*domain_lower) {
-                if Self::path_matches(&rule.path_pattern, path) {
-                    return Some(&rule.action);
-                }
+            if self.wildcard_matches(rule, &domain_lower)
+                && Self::path_matches(&rule.path_pattern, path)
+            {
+                return Some(&rule.action);
             }
         }
 

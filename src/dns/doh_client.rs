@@ -149,7 +149,7 @@ impl DohClient {
 
     fn build_tls_config() -> rustls::ClientConfig {
         let root_store = rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.iter().cloned().collect(),
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
         };
 
         let mut config = rustls::ClientConfig::builder()
@@ -354,23 +354,20 @@ impl DohClient {
     fn select_endpoints(&self, domain: &str) -> Vec<Vec<&DohEndpoint>> {
         let provider_name = self.match_dns_mapping(domain);
 
-        match provider_name {
-            Some(name) => {
-                let matched: Vec<&DohEndpoint> =
-                    self.endpoints.iter().filter(|e| e.name == name).collect();
+        if let Some(name) = provider_name {
+            let matched: Vec<&DohEndpoint> =
+                self.endpoints.iter().filter(|e| e.name == name).collect();
 
-                if matched.is_empty() {
-                    warn!(
-                        "dns_mapping 指定了提供商 '{}' 但未找到对应端点，使用默认分级策略",
-                        name
-                    );
-                    // fall through to default split below
-                } else {
-                    debug!("域名 {} 使用指定 DoH 提供商: {}", domain, name);
-                    return vec![matched];
-                }
+            if matched.is_empty() {
+                warn!(
+                    "dns_mapping 指定了提供商 '{}' 但未找到对应端点，使用默认分级策略",
+                    name
+                );
+                // fall through to default split below
+            } else {
+                debug!("域名 {} 使用指定 DoH 提供商: {}", domain, name);
+                return vec![matched];
             }
-            None => {}
         }
 
         // 分离国内/国际端点
@@ -573,7 +570,7 @@ fn extract_host(url: &str) -> Option<&str> {
         .strip_prefix("https://")
         .or_else(|| url.strip_prefix("http://"))?;
     let host = without_scheme.split('/').next()?;
-    Some(host.split(':').next()?)
+    host.split(':').next()
 }
 
 // 找 HTTP 头结束位置（\r\n\r\n 的起始索引）
@@ -730,20 +727,18 @@ fn parse_dns_response(data: &[u8]) -> anyhow::Result<Vec<IpAddr>> {
                     ips.push(IpAddr::V4(ip));
                 }
             }
-            28 => {
-                if offset + 16 <= data.len() {
-                    let ip = std::net::Ipv6Addr::new(
-                        u16::from_be_bytes([data[offset], data[offset + 1]]),
-                        u16::from_be_bytes([data[offset + 2], data[offset + 3]]),
-                        u16::from_be_bytes([data[offset + 4], data[offset + 5]]),
-                        u16::from_be_bytes([data[offset + 6], data[offset + 7]]),
-                        u16::from_be_bytes([data[offset + 8], data[offset + 9]]),
-                        u16::from_be_bytes([data[offset + 10], data[offset + 11]]),
-                        u16::from_be_bytes([data[offset + 12], data[offset + 13]]),
-                        u16::from_be_bytes([data[offset + 14], data[offset + 15]]),
-                    );
-                    ips.push(IpAddr::V6(ip));
-                }
+            28 if offset + 16 <= data.len() => {
+                let ip = std::net::Ipv6Addr::new(
+                    u16::from_be_bytes([data[offset], data[offset + 1]]),
+                    u16::from_be_bytes([data[offset + 2], data[offset + 3]]),
+                    u16::from_be_bytes([data[offset + 4], data[offset + 5]]),
+                    u16::from_be_bytes([data[offset + 6], data[offset + 7]]),
+                    u16::from_be_bytes([data[offset + 8], data[offset + 9]]),
+                    u16::from_be_bytes([data[offset + 10], data[offset + 11]]),
+                    u16::from_be_bytes([data[offset + 12], data[offset + 13]]),
+                    u16::from_be_bytes([data[offset + 14], data[offset + 15]]),
+                );
+                ips.push(IpAddr::V6(ip));
             }
             _ => {}
         }

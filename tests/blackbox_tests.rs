@@ -971,7 +971,7 @@ mod blind_box_tests {
         let cache: EvictableCache<String, i64> = EvictableCache::new(10, "test_cache");
 
         // 测试极值
-        let test_values = vec![i64::MAX, i64::MIN, 0, -1, 1, i64::MAX - 1, i64::MIN + 1];
+        let test_values = [i64::MAX, i64::MIN, 0, -1, 1, i64::MAX - 1, i64::MIN + 1];
 
         for (i, &value) in test_values.iter().enumerate() {
             cache.insert(format!("extreme_{}", i), value);

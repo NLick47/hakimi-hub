@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 pub fn data_dir() -> PathBuf {
     let base = dirs::config_dir()
-        .or_else(|| dirs::home_dir())
+        .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."));
     base.join(".hakimi-hub")
 }

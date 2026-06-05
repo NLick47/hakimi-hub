@@ -13,6 +13,12 @@ pub struct ProxyGuard {
     set_by_us: Mutex<bool>,
 }
 
+impl Default for ProxyGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProxyGuard {
     pub fn new() -> Self {
         Self {

@@ -327,7 +327,7 @@ async fn perform_mitm(
     let path = request_str
         .lines()
         .next()
-        .and_then(|line| parse_request_path(line))
+        .and_then(parse_request_path)
         .unwrap_or_else(|| "/".to_string());
 
     info!("MITM: HTTP 请求 {} {}", host, path);
@@ -1016,7 +1016,7 @@ fn resolve_upstream(
         Some(InterceptAction::SniSpoof { sni, real_host }) => {
             if ctx.sni_spoof_enabled {
                 UpstreamDecision::SniSpoof {
-                    real_host: resolve_real_host(&real_host, host),
+                    real_host: resolve_real_host(real_host, host),
                     fake_sni: sni.clone(),
                 }
             } else {

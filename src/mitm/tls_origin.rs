@@ -44,7 +44,7 @@ impl TlsOrigin {
     // 共享的 TLS 配置
     fn build_shared_tls_config() -> rustls::ClientConfig {
         let root_store = rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.iter().cloned().collect(),
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
         };
 
         let mut config = rustls::ClientConfig::builder()

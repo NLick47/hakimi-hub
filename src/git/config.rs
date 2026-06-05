@@ -31,7 +31,7 @@ impl GitConfig {
 
         // Set proxy for GitHub only (not global)
         let proxy_url = format!("http://127.0.0.1:{}", self.proxy_port);
-        self.run_git_config(&format!("http.https://github.com/.proxy"), &proxy_url)?;
+        self.run_git_config("http.https://github.com/.proxy", &proxy_url)?;
 
         // Set SSL CA info to trust our CA certificate (instead of disabling SSL verify)
         if self.ca_cert_path.exists() {

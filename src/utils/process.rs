@@ -89,7 +89,7 @@ enum SingleInstanceGuard {
     #[cfg(windows)]
     WinMutex(#[allow(dead_code)] win_mutex::MutexGuard),
     #[cfg(unix)]
-    UnixFile(unix_lock::FileGuard),
+    UnixFile(#[allow(dead_code)] unix_lock::FileGuard),
 }
 
 fn pid_file_path() -> PathBuf {
@@ -100,7 +100,7 @@ fn pid_file_path() -> PathBuf {
 const MUTEX_NAME: &str = "Global\\hakimi-hub-single-instance";
 
 pub fn is_running() -> bool {
-    SINGLE_INSTANCE_GUARD.lock().map_or(false, |g| g.is_some())
+    SINGLE_INSTANCE_GUARD.lock().is_ok_and(|g| g.is_some())
 }
 
 #[cfg(windows)]
@@ -150,6 +150,7 @@ pub fn is_process_alive_pub(pid: u32) -> bool {
     is_process_alive(pid)
 }
 
+#[allow(dead_code)]
 fn write_pid_file() -> std::io::Result<()> {
     let pid = std::process::id();
     let start_time = get_process_start_time(pid).unwrap_or_default();
@@ -169,7 +170,7 @@ pub fn read_pid_file() -> std::io::Result<Option<u32>> {
     let content = fs::read_to_string(&pid_file)?;
     let pid: u32 = match content
         .trim()
-        .splitn(2, '\n')
+        .split('\n')
         .next()
         .and_then(|s| s.parse().ok())
     {
@@ -210,6 +211,7 @@ fn is_process_alive(pid: u32) -> bool {
 }
 
 #[cfg(unix)]
+#[allow(dead_code)]
 fn get_process_start_time(pid: u32) -> Option<String> {
     let stat = fs::read_to_string(format!("/proc/{}/stat", pid)).ok()?;
     let fields: Vec<&str> = stat.split_whitespace().collect();
@@ -217,6 +219,7 @@ fn get_process_start_time(pid: u32) -> Option<String> {
 }
 
 #[cfg(windows)]
+#[allow(dead_code)]
 fn get_process_start_time(pid: u32) -> Option<String> {
     use std::ffi::c_void;
 

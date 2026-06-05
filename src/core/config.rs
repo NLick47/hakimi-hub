@@ -112,7 +112,7 @@ impl Default for BannerConfig {
 
 // ─── AppConfig ──────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     #[serde(default)]
     pub proxy: ProxyConfig,
@@ -130,21 +130,6 @@ pub struct AppConfig {
     pub intercepts: InterceptsConfig,
     #[serde(default)]
     pub cache: CacheConfig,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            proxy: ProxyConfig::default(),
-            dns: DnsConfig::default(),
-            cert: CertConfig::default(),
-            rules: RulesConfig::default(),
-            log: LogConfig::default(),
-            banner: BannerConfig::default(),
-            intercepts: InterceptsConfig::default(),
-            cache: CacheConfig::default(),
-        }
-    }
 }
 
 impl AppConfig {

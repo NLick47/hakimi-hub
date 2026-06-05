@@ -1,5 +1,5 @@
-/// Guide for setting up SSH over port 443 for GitHub
-/// This is an alternative to HTTPS proxy for git operations
+//! Guide for setting up SSH over port 443 for GitHub
+//! This is an alternative to HTTPS proxy for git operations
 
 pub fn print_ssh_guide() {
     println!(

@@ -193,7 +193,7 @@ impl DnsResolver {
             });
         }
 
-        while let Some(_) = tasks.next().await {}
+        while tasks.next().await.is_some() {}
     }
 
     // 仅用国际 DoH 重解（国内 IP 全挂时回退）
