@@ -16,7 +16,7 @@
 ### 从源码编译
 
 ```bash
-git clone https://github.com/BeyondDimension/hakimi-hub.git
+git clone https://github.com/NLick47/hakimi-hub.git
 cd hakimi-hub
 cargo build --release
 ```
