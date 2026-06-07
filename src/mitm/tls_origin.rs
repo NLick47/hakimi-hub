@@ -393,7 +393,7 @@ impl TlsOrigin {
         fake_sni: &str,
     ) -> anyhow::Result<TlsStream<TcpStream>> {
         self.sni_spoof_connector
-            .connect_with_fallback(real_domain, fake_sni)
+            .connect_stream(real_domain, fake_sni)
             .await
     }
 

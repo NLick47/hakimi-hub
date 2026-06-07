@@ -13,16 +13,18 @@ use tokio_rustls::client::TlsStream;
 use tracing::{debug, info, warn};
 
 use crate::dns::resolver::DnsResolver;
-use crate::dns::{StreamResolver, StreamResolveResult};
+use crate::dns::{StreamResolver, StreamResolveResult, WorkingIpStore};
 
 // Happy Eyeballs 参数
 const HAPPY_EYEBALLS_INITIAL_DELAY: Duration = Duration::from_millis(250);
 const HAPPY_EYEBALLS_SUBSEQUENT_DELAY: Duration = Duration::from_millis(100);
+const WORKING_IP_TRIAL_TIMEOUT: Duration = Duration::from_secs(2);
 
 // SNI 伪装连接器
 pub struct SniSpoofConnector {
     dns_resolver: Arc<DnsResolver>,
     stream_resolver: StreamResolver,
+    working_ip_store: Arc<WorkingIpStore>,
     insecure_config: Arc<rustls::ClientConfig>,
     connect_timeout: Duration,
 }
@@ -31,10 +33,12 @@ impl SniSpoofConnector {
     pub fn new(dns_resolver: Arc<DnsResolver>, connect_timeout_secs: u64) -> Self {
         let insecure_config = Arc::new(Self::build_insecure_config());
         let stream_resolver = StreamResolver::new(dns_resolver.doh_client());
+        let working_ip_store = Arc::new(WorkingIpStore::new());
 
         Self {
             dns_resolver,
             stream_resolver,
+            working_ip_store,
             insecure_config,
             connect_timeout: Duration::from_secs(connect_timeout_secs),
         }
@@ -352,24 +356,58 @@ impl SniSpoofConnector {
     ) -> anyhow::Result<TlsStream<TcpStream>> {
         debug!("流式 SNI 伪装: {} (SNI={})", real_domain, fake_sni);
 
-        let mut ip_rx = self.stream_resolver.resolve_stream(real_domain);
         let fake_sni = Arc::new(fake_sni.to_string());
         let real_domain = Arc::new(real_domain.to_string());
         let insecure_config = self.insecure_config.clone();
         let connect_timeout = self.connect_timeout;
+        let working_ip_store = self.working_ip_store.clone();
+
+        let working_ips = working_ip_store.get(&real_domain);
+        let has_working_ips = !working_ips.is_empty();
+        if has_working_ips {
+            debug!("流式 SNI 伪装: 加载 {} 个历史成功 IP，先尝试", working_ips.len());
+        }
 
         type PendingFuture =
-            Pin<Box<dyn std::future::Future<Output = anyhow::Result<TlsStream<TcpStream>>> + Send>>;
+            Pin<Box<dyn std::future::Future<Output = anyhow::Result<(TlsStream<TcpStream>, std::net::IpAddr)>> + Send>>;
         let mut pending: FuturesUnordered<PendingFuture> = FuturesUnordered::new();
         let mut seen_ips: HashSet<std::net::IpAddr> = HashSet::new();
+
+        for ip in &working_ips {
+            seen_ips.insert(*ip);
+            let rd = real_domain.clone();
+            let fs = fake_sni.clone();
+            let cfg = insecure_config.clone();
+            let ip = *ip;
+            pending.push(Box::pin(async move {
+                Self::do_sni_connect(&rd, &fs, &cfg, ip, connect_timeout)
+                    .await
+                    .map(|stream| (stream, ip))
+            }));
+        }
+
+        let mut ip_rx: Option<tokio::sync::mpsc::Receiver<StreamResolveResult>> = None;
+        let mut dns_started = false;
         let mut dns_done = false;
+
+        if !has_working_ips {
+            ip_rx = Some(self.stream_resolver.resolve_stream(&real_domain));
+            dns_started = true;
+        }
+
+        let trial_deadline = if has_working_ips {
+            Some(tokio::time::Instant::now() + WORKING_IP_TRIAL_TIMEOUT)
+        } else {
+            None
+        };
 
         loop {
             tokio::select! {
                 Some(result) = pending.next() => {
                     match result {
-                        Ok(stream) => {
+                        Ok((stream, ip)) => {
                             debug!("流式 SNI 伪装: 连接成功 (剩余 {} 个未完成)", pending.len());
+                            working_ip_store.record_success(&real_domain, ip);
                             return Ok(stream);
                         }
                         Err(e) => {
@@ -384,7 +422,19 @@ impl SniSpoofConnector {
                     }
                 }
 
-                Some(resolve_result) = ip_rx.recv(), if !dns_done => {
+                _ = tokio::time::sleep_until(trial_deadline.unwrap_or(tokio::time::Instant::now())), if trial_deadline.is_some() && !dns_started => {
+                    debug!("流式 SNI 伪装: 历史 IP 尝试超时，启动 DoH 查询");
+                    ip_rx = Some(self.stream_resolver.resolve_stream(&real_domain));
+                    dns_started = true;
+                }
+
+                Some(resolve_result) = async {
+                    if let Some(ref mut rx) = ip_rx {
+                        rx.recv().await
+                    } else {
+                        std::future::pending().await
+                    }
+                }, if dns_started && !dns_done => {
                     let StreamResolveResult { ip, source } = resolve_result;
 
                     if !seen_ips.insert(ip) {
@@ -397,15 +447,19 @@ impl SniSpoofConnector {
                     let fs = fake_sni.clone();
                     let cfg = insecure_config.clone();
                     pending.push(Box::pin(async move {
-                        Self::do_sni_connect(&rd, &fs, &cfg, ip, connect_timeout).await
+                        Self::do_sni_connect(&rd, &fs, &cfg, ip, connect_timeout)
+                            .await
+                            .map(|stream| (stream, ip))
                     }));
                 }
 
                 else => {
-                    dns_done = true;
-                    if pending.is_empty() {
-                        warn!("流式 SNI 伪装: DoH 未返回任何 IP: {}", real_domain);
-                        anyhow::bail!("DoH 未返回任何 IP: {}", real_domain);
+                    if dns_started {
+                        dns_done = true;
+                        if pending.is_empty() {
+                            warn!("流式 SNI 伪装: DoH 未返回任何 IP: {}", real_domain);
+                            anyhow::bail!("DoH 未返回任何 IP: {}", real_domain);
+                        }
                     }
                 }
             }
