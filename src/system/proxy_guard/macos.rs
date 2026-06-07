@@ -10,10 +10,9 @@ fn backup_path() -> PathBuf {
     crate::utils::paths::data_dir().join("proxy-settings.bak")
 }
 
-fn save_backup(settings: &SystemProxySettings) -> anyhow::Result<()> {
-    let content = serde_json::to_string(settings)?;
-    std::fs::write(backup_path(), content)?;
-    Ok(())
+fn create_backup_marker() {
+    // 创建一个空的标记文件，用于崩溃恢复时检测
+    let _ = std::fs::write(backup_path(), "");
 }
 
 fn delete_backup() {
@@ -46,6 +45,7 @@ fn get_network_services() -> Vec<String> {
     }
 }
 
+/// 系统代理设置结构体（用于 read_proxy_settings）
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SystemProxySettings {
     pub proxy_enabled: bool,
@@ -56,7 +56,6 @@ pub struct SystemProxySettings {
 #[derive(Debug)]
 #[must_use = "ProxyGuard 离开作用域时会恢复代理设置"]
 pub struct ProxyGuard {
-    state: Mutex<Option<SystemProxySettings>>,
     set_by_us: Mutex<bool>,
 }
 
@@ -69,60 +68,13 @@ impl Default for ProxyGuard {
 impl ProxyGuard {
     pub fn new() -> Self {
         Self {
-            state: Mutex::new(None),
             set_by_us: Mutex::new(false),
         }
     }
 
-    fn read_current_state() -> anyhow::Result<SystemProxySettings> {
-        let services = get_network_services();
-        let service = services.first().map(|s| s.as_str()).unwrap_or("Wi-Fi");
-
-        let output = std::process::Command::new("networksetup")
-            .args(["-getwebproxy", service])
-            .output()?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let enabled = stdout.contains("Enabled: Yes");
-
-        let proxy_server = if enabled {
-            let server = stdout
-                .lines()
-                .find(|l| l.starts_with("Server:"))
-                .and_then(|l| l.split(':').nth(1))
-                .map(|s| s.trim().to_string());
-
-            let port = stdout
-                .lines()
-                .find(|l| l.starts_with("Port:"))
-                .and_then(|l| l.split(':').nth(1))
-                .map(|s| s.trim().to_string());
-
-            match (server, port) {
-                (Some(s), Some(p)) => Some(format!("{}:{}", s, p)),
-                _ => None,
-            }
-        } else {
-            None
-        };
-
-        Ok(SystemProxySettings {
-            proxy_enabled: enabled,
-            proxy_server,
-            proxy_override: None,
-        })
-    }
-
     pub async fn set_proxy(&self, port: u16) -> anyhow::Result<()> {
-        {
-            let mut state = self.state.lock().unwrap();
-            if state.is_none() {
-                *state = Some(Self::read_current_state()?);
-            }
-            if let Some(ref saved) = *state {
-                save_backup(saved)?;
-            }
-        }
+        // 创建备份标记文件（用于崩溃恢复）
+        create_backup_marker();
 
         let pac_url = format!("http://127.0.0.1:{}/pac", port);
         let services = get_network_services();
@@ -155,63 +107,24 @@ impl ProxyGuard {
 
     /// 同步恢复代理设置（用于 Drop 和信号处理）
     pub fn restore_sync(&self) -> anyhow::Result<()> {
-        // 使用 unwrap_or_else 处理 poisoned mutex，确保 Drop 时不会 panic
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let mut was_set = self.set_by_us.lock().unwrap_or_else(|e| e.into_inner());
 
         if !*was_set {
             return Ok(());
         }
 
-        let saved = state.take();
+        let services = get_network_services();
 
-        if let Some(ref saved) = saved {
-            let services = get_network_services();
-
-            for service in &services {
-                // 关闭 PAC
-                let _ = std::process::Command::new("networksetup")
-                    .args(["-setautoproxyurl", service, ""])
-                    .output();
-
-                if saved.proxy_enabled {
-                    if let Some(ref server_port) = saved.proxy_server {
-                        let parts: Vec<&str> = server_port.split(':').collect();
-                        if parts.len() == 2 {
-                            let server = parts[0];
-                            let port = parts[1];
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setwebproxy", service, server, port])
-                                .output();
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setsecurewebproxy", service, server, port])
-                                .output();
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setwebproxystate", service, "on"])
-                                .output();
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setsecurewebproxystate", service, "on"])
-                                .output();
-                        }
-                    }
-                } else {
-                    let _ = std::process::Command::new("networksetup")
-                        .args(["-setwebproxystate", service, "off"])
-                        .output();
-
-                    let _ = std::process::Command::new("networksetup")
-                        .args(["-setsecurewebproxystate", service, "off"])
-                        .output();
-                }
-            }
-
-            delete_backup();
-            info!("系统代理已恢复: enabled={}", saved.proxy_enabled);
+        // macOS 还原逻辑：只需关闭 PAC 即可
+        // 系统会自动回退到之前的代理设置（如果有的话）
+        for service in &services {
+            let _ = std::process::Command::new("networksetup")
+                .args(["-setautoproxyurl", service, ""])
+                .output();
         }
+
+        delete_backup();
+        info!("系统代理已恢复 (PAC已关闭)");
 
         *was_set = false;
         Ok(())
@@ -220,102 +133,44 @@ impl ProxyGuard {
 
 impl Drop for ProxyGuard {
     fn drop(&mut self) {
-        // 使用与 Windows 一致的逻辑，先检查 was_set 标志
         let was_set = self.set_by_us.lock().unwrap_or_else(|e| e.into_inner());
 
         if !*was_set {
             return;
         }
 
-        // 获取保存的状态
-        let saved = self.state.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let services = get_network_services();
 
-        if let Some(ref saved) = saved {
-            let services = get_network_services();
-
-            for service in &services {
-                // 关闭 PAC
-                let _ = std::process::Command::new("networksetup")
-                    .args(["-setautoproxyurl", service, ""])
-                    .output();
-
-                if saved.proxy_enabled {
-                    if let Some(ref server_port) = saved.proxy_server {
-                        let parts: Vec<&str> = server_port.split(':').collect();
-                        if parts.len() == 2 {
-                            let server = parts[0];
-                            let port = parts[1];
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setwebproxy", service, server, port])
-                                .output();
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setsecurewebproxy", service, server, port])
-                                .output();
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setwebproxystate", service, "on"])
-                                .output();
-
-                            let _ = std::process::Command::new("networksetup")
-                                .args(["-setsecurewebproxystate", service, "on"])
-                                .output();
-                        }
-                    }
-                } else {
-                    let _ = std::process::Command::new("networksetup")
-                        .args(["-setwebproxystate", service, "off"])
-                        .output();
-
-                    let _ = std::process::Command::new("networksetup")
-                        .args(["-setsecurewebproxystate", service, "off"])
-                        .output();
-                }
-            }
-
-            delete_backup();
-            info!("系统代理已恢复: enabled={}", saved.proxy_enabled);
+        // macOS 还原逻辑：只需关闭 PAC 即可
+        for service in &services {
+            let _ = std::process::Command::new("networksetup")
+                .args(["-setautoproxyurl", service, ""])
+                .output();
         }
 
-        // 重置标志
-        *self.set_by_us.lock().unwrap_or_else(|e| e.into_inner()) = false;
+        delete_backup();
+        info!("系统代理已恢复 (PAC已关闭)");
     }
 }
 
+/// 从崩溃中恢复代理设置
+/// 检测备份标记文件是否存在，如果存在则关闭 PAC
 pub fn restore_proxy_settings() -> anyhow::Result<()> {
     let path = backup_path();
     if !path.exists() {
         return Ok(());
     }
 
-    let content = std::fs::read_to_string(&path)?;
-    let settings: SystemProxySettings = serde_json::from_str(&content)?;
-
     let services = get_network_services();
 
+    // macOS 还原逻辑：只需关闭 PAC 即可
     for service in &services {
         let _ = std::process::Command::new("networksetup")
             .args(["-setautoproxyurl", service, ""])
             .output();
-
-        if settings.proxy_enabled {
-            if let Some(ref server_port) = settings.proxy_server {
-                let parts: Vec<&str> = server_port.split(':').collect();
-                if parts.len() == 2 {
-                    let _ = std::process::Command::new("networksetup")
-                        .args(["-setwebproxy", service, parts[0], parts[1]])
-                        .output();
-
-                    let _ = std::process::Command::new("networksetup")
-                        .args(["-setwebproxystate", service, "on"])
-                        .output();
-                }
-            }
-        }
     }
 
     let _ = std::fs::remove_file(&path);
-    info!("已从备份恢复系统代理设置");
+    info!("已从崩溃恢复中还原系统代理设置 (PAC已关闭)");
     Ok(())
 }

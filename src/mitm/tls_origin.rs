@@ -11,8 +11,8 @@ use crate::dns::resolver::DnsResolver;
 use crate::mitm::sni_spoof::SniSpoofConnector;
 
 // Happy Eyeballs 参数
-const HAPPY_EYEBALLS_INITIAL_DELAY: Duration = Duration::from_millis(250);
-const HAPPY_EYEBALLS_SUBSEQUENT_DELAY: Duration = Duration::from_millis(100);
+const HAPPY_EYEBALLS_INITIAL_DELAY: Duration = Duration::from_millis(100);
+const HAPPY_EYEBALLS_SUBSEQUENT_DELAY: Duration = Duration::from_millis(50);
 
 // 建立到真实目标的 TLS 连接
 pub struct TlsOrigin {
@@ -52,7 +52,7 @@ impl TlsOrigin {
             .with_no_client_auth();
 
         config.alpn_protocols = vec![b"http/1.1".to_vec()];
-        config.resumption = rustls::client::Resumption::default();
+        config.resumption = rustls::client::Resumption::in_memory_sessions(256);
 
         config
     }

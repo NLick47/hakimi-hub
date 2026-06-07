@@ -156,7 +156,7 @@ impl DohClient {
             .with_root_certificates(root_store)
             .with_no_client_auth();
 
-        config.resumption = rustls::client::Resumption::default();
+        config.resumption = rustls::client::Resumption::in_memory_sessions(256);
         config
     }
 

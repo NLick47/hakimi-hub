@@ -16,8 +16,8 @@ use crate::dns::resolver::DnsResolver;
 use crate::dns::{StreamResolver, StreamResolveResult, WorkingIpStore};
 
 // Happy Eyeballs 参数
-const HAPPY_EYEBALLS_INITIAL_DELAY: Duration = Duration::from_millis(250);
-const HAPPY_EYEBALLS_SUBSEQUENT_DELAY: Duration = Duration::from_millis(100);
+const HAPPY_EYEBALLS_INITIAL_DELAY: Duration = Duration::from_millis(100);
+const HAPPY_EYEBALLS_SUBSEQUENT_DELAY: Duration = Duration::from_millis(50);
 const WORKING_IP_TRIAL_TIMEOUT: Duration = Duration::from_secs(2);
 
 // SNI 伪装连接器

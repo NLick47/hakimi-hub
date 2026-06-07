@@ -105,8 +105,8 @@ where
 
     let mut a_to_b = 0u64;
     let mut b_to_a = 0u64;
-    let mut a_buf = [0u8; 8192];
-    let mut b_buf = [0u8; 8192];
+    let mut a_buf = [0u8; 32768];
+    let mut b_buf = [0u8; 32768];
 
     loop {
         tokio::select! {
@@ -175,8 +175,8 @@ fn is_http_method(bytes: &[u8]) -> bool {
 }
 
 pub async fn handle_connect(mut client: TcpStream, ctx: &HandlerContext) -> anyhow::Result<()> {
-    let mut request_buf = Vec::with_capacity(512);
-    let mut tmp = [0u8; 512];
+    let mut request_buf = Vec::with_capacity(4096);
+    let mut tmp = [0u8; 4096];
 
     loop {
         let n = client.read(&mut tmp).await?;

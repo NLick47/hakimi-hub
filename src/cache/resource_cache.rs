@@ -132,7 +132,7 @@ impl ResourceCache {
 
         let content = std::fs::read_to_string(path)?;
         let map: std::collections::HashMap<String, CacheMetadata> = serde_json::from_str(&content)?;
-        let dashmap = DashMap::new();
+        let dashmap = DashMap::with_capacity(map.len());
         for (k, v) in map {
             dashmap.insert(k, v);
         }
