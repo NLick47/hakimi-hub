@@ -25,16 +25,15 @@ struct CacheValue {
 
 // DNS 解析器，整合 DoH + 测速 + 缓存
 pub struct DnsResolver {
-    doh_client: DohClient,
+    doh_client: Arc<DohClient>,
     ip_prober: IpProber,
     cache: EvictableCache<String, CacheValue>,
-    // 定时重测间隔（和缓存 TTL 不同）
     probe_interval: Duration,
 }
 
 impl DnsResolver {
     pub fn new(config: &DnsConfig) -> anyhow::Result<Self> {
-        let doh_client = DohClient::new(config.doh_endpoints.clone(), config.dns_mapping.clone());
+        let doh_client = Arc::new(DohClient::new(config.doh_endpoints.clone(), config.dns_mapping.clone()));
 
         doh_client.preresolve_doh_hosts();
 
@@ -45,7 +44,6 @@ impl DnsResolver {
         Ok(Self {
             doh_client,
             ip_prober: IpProber::new(config),
-            // 惰性淘汰缓存，get 时自动查 TTL
             cache: EvictableCache::with_ttl(max_entries, "dns_cache", cache_ttl),
             probe_interval,
         })
@@ -246,5 +244,9 @@ impl DnsResolver {
     pub fn invalidate_all(&self) {
         self.cache.clear();
         self.ip_prober.invalidate_all();
+    }
+
+    pub fn doh_client(&self) -> Arc<DohClient> {
+        self.doh_client.clone()
     }
 }

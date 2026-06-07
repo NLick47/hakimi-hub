@@ -2,6 +2,7 @@
 //
 // 连到真实 IP 但发假的 SNI，跳过证书验证。
 
+use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,9 +10,10 @@ use std::time::Duration;
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::net::TcpStream;
 use tokio_rustls::client::TlsStream;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::dns::resolver::DnsResolver;
+use crate::dns::{StreamResolver, StreamResolveResult};
 
 // Happy Eyeballs 参数
 const HAPPY_EYEBALLS_INITIAL_DELAY: Duration = Duration::from_millis(250);
@@ -20,6 +22,7 @@ const HAPPY_EYEBALLS_SUBSEQUENT_DELAY: Duration = Duration::from_millis(100);
 // SNI 伪装连接器
 pub struct SniSpoofConnector {
     dns_resolver: Arc<DnsResolver>,
+    stream_resolver: StreamResolver,
     insecure_config: Arc<rustls::ClientConfig>,
     connect_timeout: Duration,
 }
@@ -27,9 +30,11 @@ pub struct SniSpoofConnector {
 impl SniSpoofConnector {
     pub fn new(dns_resolver: Arc<DnsResolver>, connect_timeout_secs: u64) -> Self {
         let insecure_config = Arc::new(Self::build_insecure_config());
+        let stream_resolver = StreamResolver::new(dns_resolver.doh_client());
 
         Self {
             dns_resolver,
+            stream_resolver,
             insecure_config,
             connect_timeout: Duration::from_secs(connect_timeout_secs),
         }
@@ -338,6 +343,73 @@ impl SniSpoofConnector {
         debug!("SNI 伪装连接成功: {} (SNI={})", addr, fake_sni);
 
         Ok(tls_stream)
+    }
+
+    pub async fn connect_stream(
+        &self,
+        real_domain: &str,
+        fake_sni: &str,
+    ) -> anyhow::Result<TlsStream<TcpStream>> {
+        debug!("流式 SNI 伪装: {} (SNI={})", real_domain, fake_sni);
+
+        let mut ip_rx = self.stream_resolver.resolve_stream(real_domain);
+        let fake_sni = Arc::new(fake_sni.to_string());
+        let real_domain = Arc::new(real_domain.to_string());
+        let insecure_config = self.insecure_config.clone();
+        let connect_timeout = self.connect_timeout;
+
+        type PendingFuture =
+            Pin<Box<dyn std::future::Future<Output = anyhow::Result<TlsStream<TcpStream>>> + Send>>;
+        let mut pending: FuturesUnordered<PendingFuture> = FuturesUnordered::new();
+        let mut seen_ips: HashSet<std::net::IpAddr> = HashSet::new();
+        let mut dns_done = false;
+
+        loop {
+            tokio::select! {
+                Some(result) = pending.next() => {
+                    match result {
+                        Ok(stream) => {
+                            debug!("流式 SNI 伪装: 连接成功 (剩余 {} 个未完成)", pending.len());
+                            return Ok(stream);
+                        }
+                        Err(e) => {
+                            debug!("流式 SNI 伪装: 候选连接失败: {}", e);
+                            if dns_done && pending.is_empty() {
+                                anyhow::bail!(
+                                    "流式 SNI 伪装: 所有 IP 均连接失败: {} (SNI={})",
+                                    real_domain, fake_sni
+                                );
+                            }
+                        }
+                    }
+                }
+
+                Some(resolve_result) = ip_rx.recv(), if !dns_done => {
+                    let StreamResolveResult { ip, source } = resolve_result;
+
+                    if !seen_ips.insert(ip) {
+                        continue;
+                    }
+
+                    debug!("流式 SNI 伪装: DoH {} 返回 IP {}", source, ip);
+
+                    let rd = real_domain.clone();
+                    let fs = fake_sni.clone();
+                    let cfg = insecure_config.clone();
+                    pending.push(Box::pin(async move {
+                        Self::do_sni_connect(&rd, &fs, &cfg, ip, connect_timeout).await
+                    }));
+                }
+
+                else => {
+                    dns_done = true;
+                    if pending.is_empty() {
+                        warn!("流式 SNI 伪装: DoH 未返回任何 IP: {}", real_domain);
+                        anyhow::bail!("DoH 未返回任何 IP: {}", real_domain);
+                    }
+                }
+            }
+        }
     }
 }
 

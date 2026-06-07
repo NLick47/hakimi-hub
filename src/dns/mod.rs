@@ -1,8 +1,10 @@
 pub mod doh_client;
 pub mod ip_prober;
 pub mod resolver;
+pub mod stream_resolver;
 
 pub use ip_prober::IpProber;
+pub use stream_resolver::{StreamResolveResult, StreamResolver};
 
 use std::net::IpAddr;
 

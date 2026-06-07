@@ -469,9 +469,44 @@ impl DohClient {
         Ok(ips)
     }
 
-    // 拿 DoH 服务器的 IP
-    // 没预解析 IP 时直接报错，避免在离线环境阻塞
-    // 要动态解析，初始化时调 preresolve_doh_hosts()
+    pub fn endpoints(&self) -> &[DohEndpoint] {
+        &self.endpoints
+    }
+
+    pub async fn query_single_host(
+        &self,
+        host: &str,
+        domain: &str,
+        timeout: Duration,
+    ) -> anyhow::Result<Vec<IpAddr>> {
+        debug!("DoH 单主机查询: {} (via {}, timeout={}s)", domain, host, timeout.as_secs());
+
+        let mut tls_stream = match self.acquire_connection(host) {
+            Some(stream) => stream,
+            None => {
+                let ip = self.get_doh_server_ip(host).await?;
+                let addr = std::net::SocketAddr::new(ip, 443);
+
+                let tcp_stream = tokio::time::timeout(timeout, TcpStream::connect(addr))
+                    .await
+                    .map_err(|_| anyhow::anyhow!("TCP 连接超时 ({})", host))??;
+                tcp_stream.set_nodelay(true)?;
+
+                tokio::time::timeout(timeout, self.establish_tls(tcp_stream, host))
+                    .await
+                    .map_err(|_| anyhow::anyhow!("TLS 握手超时 ({})", host))??
+            }
+        };
+
+        let result = self.execute_queries(&mut tls_stream, host, domain).await;
+
+        if result.is_ok() {
+            self.return_connection(host, tls_stream);
+        }
+
+        result
+    }
+
     async fn get_doh_server_ip(&self, host: &str) -> anyhow::Result<IpAddr> {
         if let Some(ips) = self.preresolved_ips.get(host) {
             if let Some(ip) = ips.first() {
@@ -716,16 +751,14 @@ fn parse_dns_response(data: &[u8]) -> anyhow::Result<Vec<IpAddr>> {
         offset += 10;
 
         match rtype {
-            1 => {
-                if offset + 4 <= data.len() {
-                    let ip = std::net::Ipv4Addr::new(
-                        data[offset],
-                        data[offset + 1],
-                        data[offset + 2],
-                        data[offset + 3],
-                    );
-                    ips.push(IpAddr::V4(ip));
-                }
+            1 if offset + 4 <= data.len() => {
+                let ip = std::net::Ipv4Addr::new(
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                );
+                ips.push(IpAddr::V4(ip));
             }
             28 if offset + 16 <= data.len() => {
                 let ip = std::net::Ipv6Addr::new(

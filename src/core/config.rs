@@ -29,7 +29,7 @@ fn default_banner_theme() -> String {
 }
 
 fn default_dns_probe_timeout() -> u64 {
-    8
+    4
 }
 fn default_dns_max_concurrent() -> usize {
     32
@@ -44,7 +44,7 @@ fn default_dns_sni_spoof() -> String {
     "www.baidu.com".to_string()
 }
 fn default_dns_connect_timeout() -> u64 {
-    10
+    5
 }
 fn default_max_cache_entries() -> Option<usize> {
     Some(1000)
@@ -472,110 +472,66 @@ pub struct DnsConfig {
 
 fn default_doh_endpoints() -> Vec<DohEndpoint> {
     vec![
+        // 国内 DoH（精简为 3 个高质量）
+        // 腾讯 DNSPod - 稳定可靠
+        DohEndpoint {
+            name: "tencent-doh".into(),
+            url: "https://doh.pub/dns-query".into(),
+            priority: 10,
+            trusted: false,
+            preset_ip: Some("119.29.29.29".into()),
+        },
+        // 阿里 DNS - 备用
         DohEndpoint {
             name: "alidns".into(),
             url: "https://dns.alidns.com/dns-query".into(),
-            priority: 10,
+            priority: 11,
             trusted: false,
             preset_ip: Some("223.5.5.5".into()),
         },
+        // 腾讯 DNSPod 备用 IP
         DohEndpoint {
-            name: "alidns-backup".into(),
-            url: "https://dns.alidns.com/dns-query".into(),
-            priority: 11,
-            trusted: false,
-            preset_ip: Some("223.6.6.6".into()),
-        },
-        DohEndpoint {
-            name: "tencent-doh".into(),
+            name: "dnspod-backup".into(),
             url: "https://doh.pub/dns-query".into(),
             priority: 12,
             trusted: false,
             preset_ip: Some("119.29.29.29".into()),
         },
-        DohEndpoint {
-            name: "dnspod".into(),
-            url: "https://doh.pub/dns-query".into(),
-            priority: 13,
-            trusted: false,
-            preset_ip: Some("119.29.29.29".into()),
-        },
-        DohEndpoint {
-            name: "360-doh".into(),
-            url: "https://doh.360.cn/dns-query".into(),
-            priority: 14,
-            trusted: false,
-            preset_ip: Some("101.226.4.6".into()),
-        },
-        DohEndpoint {
-            name: "baidu-doh".into(),
-            url: "https://doh.baidu.com/dns-query".into(),
-            priority: 15,
-            trusted: false,
-            preset_ip: Some("180.76.76.76".into()),
-        },
+        // 国际 DoH（优先 Cloudflare 和 Google）
         DohEndpoint {
             name: "cloudflare-1".into(),
             url: "https://cloudflare-dns.com/dns-query".into(),
-            priority: 30,
+            priority: 20,
             trusted: true,
             preset_ip: Some("104.16.249.249".into()),
         },
         DohEndpoint {
             name: "cloudflare-2".into(),
             url: "https://cloudflare-dns.com/dns-query".into(),
-            priority: 31,
+            priority: 21,
             trusted: true,
             preset_ip: Some("104.16.248.249".into()),
         },
         DohEndpoint {
-            name: "cloudflare-3".into(),
-            url: "https://cloudflare-dns.com/dns-query".into(),
-            priority: 32,
-            trusted: true,
-            preset_ip: Some("104.16.132.229".into()),
-        },
-        DohEndpoint {
-            name: "cloudflare-4".into(),
-            url: "https://cloudflare-dns.com/dns-query".into(),
-            priority: 33,
-            trusted: true,
-            preset_ip: Some("162.159.36.1".into()),
-        },
-        DohEndpoint {
-            name: "cloudflare-5".into(),
-            url: "https://cloudflare-dns.com/dns-query".into(),
-            priority: 34,
-            trusted: true,
-            preset_ip: Some("162.159.46.1".into()),
-        },
-        DohEndpoint {
             name: "google-dns-1".into(),
             url: "https://dns.google/dns-query".into(),
-            priority: 40,
+            priority: 22,
             trusted: true,
             preset_ip: Some("8.8.8.8".into()),
         },
         DohEndpoint {
             name: "google-dns-2".into(),
             url: "https://dns.google/dns-query".into(),
-            priority: 41,
+            priority: 23,
             trusted: true,
             preset_ip: Some("8.8.4.4".into()),
         },
         DohEndpoint {
             name: "quad9".into(),
             url: "https://dns.quad9.net/dns-query".into(),
-            priority: 50,
+            priority: 24,
             trusted: true,
             preset_ip: Some("9.9.9.9".into()),
-        },
-        DohEndpoint {
-            name: "adguard".into(),
-            url: "https://dns.adguard-dns.com/dns-query".into(),
-            priority: 60,
-            trusted: true,
-            preset_ip: Some("94.140.14.14".into()),
         },
         // IPv6 端点已移除（默认禁用 IPv6，这些端点不会用到）
         // 如需 IPv6，可在配置文件中手动添加
